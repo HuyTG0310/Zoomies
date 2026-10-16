@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "10289030193",
+    "project_id": "zoomies-e296d",
+    "storage_bucket": "zoomies-e296d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:10289030193:android:03dbaa35517bc7bd412110",
+        "android_client_info": {
+          "package_name": "com.example.zoomies"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "10289030193-lu24qt04t9l5bu3vqej7hehof4suncai.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCCCEBhK5y49XYdHwCYIXjV9K1rUzRNXMU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "10289030193-lu24qt04t9l5bu3vqej7hehof4suncai.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
