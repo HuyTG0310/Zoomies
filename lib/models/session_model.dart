@@ -70,7 +70,7 @@ class SessionModel {
       'id': id,
       'userId': userId,
       'petName': petName,
-      'petType': petType.name,
+      'petType': petType.displayName,
       'imageUrl': imageUrl,
       'triageLevel': triageLevel.name,
       'preliminaryAssessment': preliminaryAssessment,
@@ -83,31 +83,56 @@ class SessionModel {
   }
 
   factory SessionModel.fromMap(Map<String, dynamic> map, {String? id}) {
+    DateTime parseTime(dynamic val) {
+      if (val == null) return DateTime.now();
+      if (val is DateTime) return val;
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      try {
+        return (val as dynamic).toDate() as DateTime;
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+
+    // Nhận diện loài (hỗ trợ cả tiếng Việt "Chó", "Mèo" và tiếng Anh)
+    final rawPetType = (map['petType'] as String?)?.toLowerCase() ?? '';
+    final petType = (rawPetType.contains('mèo') || rawPetType == 'cat')
+        ? PetType.cat
+        : PetType.dog;
+
+    // Hỗ trợ cả cấu trúc TriageCard từ Firestore và cấu trúc phẳng của UI
+    final triageCard = map['triageCard'] is Map
+        ? (map['triageCard'] as Map).cast<String, dynamic>()
+        : null;
+
+    final rawLevel = (triageCard?['urgencyLevel'] ?? map['triageLevel'] as String?)?.toUpperCase() ?? '';
+    final triageLevel = rawLevel == 'GREEN'
+        ? TriageLevel.green
+        : (rawLevel == 'RED' ? TriageLevel.red : TriageLevel.yellow);
+
+    final summary = (triageCard?['summary'] ?? map['preliminaryAssessment'] ?? map['initialSymptoms'] ?? '') as String;
+    final rawActions = triageCard?['immediateActions'] ?? map['immediateActions'];
+    final immediateActions = rawActions is List
+        ? rawActions.map((e) => e.toString()).toList()
+        : <String>[];
+
     return SessionModel(
-      id: id ?? map['id'] ?? '',
-      userId: map['userId'] ?? 'user_default',
-      petName: map['petName'] ?? 'Thú cưng',
-      petType: PetType.values.firstWhere(
-        (e) => e.name == map['petType'],
-        orElse: () => PetType.dog,
-      ),
-      imageUrl: map['imageUrl'],
-      triageLevel: TriageLevel.values.firstWhere(
-        (e) => e.name == map['triageLevel'],
-        orElse: () => TriageLevel.yellow,
-      ),
-      preliminaryAssessment: map['preliminaryAssessment'] ?? '',
-      immediateActions: List<String>.from(map['immediateActions'] ?? []),
-      disclaimer: map['disclaimer'] ?? defaultDisclaimer,
-      createdAt: map['createdAt'] is String
-          ? DateTime.tryParse(map['createdAt']) ?? DateTime.now()
-          : DateTime.now(),
-      lastMessage: map['lastMessage'],
-      status: map['status'] ?? 'active',
+      id: id ?? (map['id'] as String?) ?? '',
+      userId: (map['userId'] as String?) ?? 'user_default',
+      petName: (map['petName'] as String?) ?? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo'),
+      petType: petType,
+      imageUrl: map['imageUrl'] as String?,
+      triageLevel: triageLevel,
+      preliminaryAssessment: summary,
+      immediateActions: immediateActions,
+      disclaimer: (map['disclaimer'] as String?) ?? defaultDisclaimer,
+      createdAt: parseTime(map['createdAt']),
+      lastMessage: map['lastMessage'] as String?,
+      status: (map['status'] as String?) ?? 'active',
     );
   }
 
   static const String defaultDisclaimer =
       '⚠️ LƯU Ý MIỄN TRỪ TRÁCH NHIỆM Y TẾ: Đánh giá phân loại Triage và gợi ý sơ cứu này được cung cấp bởi hệ thống AI Zoomies nhằm mục đích sàng lọc và tham khảo ban đầu. Đây KHÔNG phải là chẩn đoán y khoa chính thức từ bác sĩ thú y. Nếu thú cưng có triệu chứng nguy hiểm hoặc diễn tiến nặng, hãy liên hệ ngay cơ sở y tế thú y gần nhất.';
 }
-

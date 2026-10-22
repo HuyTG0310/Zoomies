@@ -17,6 +17,11 @@ class ChatMessage {
     this.status = MessageStatus.sent,
   });
 
+  // Getter hỗ trợ định dạng role trên Firestore ("user" | "model")
+  String get role => isUser ? 'user' : 'model';
+  bool get isModel => !isUser;
+  DateTime get createdAt => timestamp;
+
   ChatMessage copyWith({
     String? id,
     String? text,
@@ -38,25 +43,40 @@ class ChatMessage {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'text': text,
+      'role': role,
       'isUser': isUser,
+      'text': text,
       'timestamp': timestamp.toIso8601String(),
-      'imageUrl': imageUrl,
+      'createdAt': timestamp,
+      if (imageUrl != null) 'imageUrl': imageUrl,
       'status': status.name,
     };
   }
 
   factory ChatMessage.fromMap(Map<String, dynamic> map, {String? id}) {
+    DateTime parseTime(dynamic val) {
+      if (val == null) return DateTime.now();
+      if (val is DateTime) return val;
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      try {
+        return (val as dynamic).toDate() as DateTime;
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+
+    final rawIsUser = map['isUser'];
+    final bool resolvedIsUser = rawIsUser is bool
+        ? rawIsUser
+        : (map['role'] == 'user');
+
     return ChatMessage(
-      id: id ?? map['id'] ?? '',
-      text: map['text'] ?? '',
-      isUser: map['isUser'] ?? false,
-      timestamp: map['timestamp'] is String
-          ? DateTime.tryParse(map['timestamp']) ?? DateTime.now()
-          : (map['timestamp'] != null && map['timestamp'].toDate != null
-              ? map['timestamp'].toDate()
-              : DateTime.now()),
-      imageUrl: map['imageUrl'],
+      id: id ?? (map['id'] as String?) ?? '',
+      text: (map['text'] as String?) ?? '',
+      isUser: resolvedIsUser,
+      timestamp: parseTime(map['createdAt'] ?? map['timestamp']),
+      imageUrl: map['imageUrl'] as String?,
       status: MessageStatus.values.firstWhere(
         (e) => e.name == map['status'],
         orElse: () => MessageStatus.sent,
@@ -64,4 +84,3 @@ class ChatMessage {
     );
   }
 }
-

@@ -1,0 +1,43 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "zoomies-e296d",
+          "appId": "1:10289030193:android:03dbaa35517bc7bd412110",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "zoomies-e296d",
+          "configurations": {
+            "android": "1:10289030193:android:03dbaa35517bc7bd412110",
+            "ios": "1:10289030193:ios:a2928eb698c88bee412110",
+            "web": "1:10289030193:web:d9c80a8c41ca6e8c412110"
+          }
+        }
+      }
+    }
+  }
+}

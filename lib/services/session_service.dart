@@ -1,13 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import '../models/chat_message.dart';
 import '../models/pet_type.dart';
 import '../models/session_model.dart';
 import '../models/triage_level.dart';
 
-/// Service quản lý Sessions và Chat Messages.
-/// Hiện tại chạy Mock Stream thời gian thực chuẩn kiến trúc Firestore & Cloud Functions.
-/// Khi đã sẵn sàng kết nối Firebase, chỉ cần cập nhật các hàm sang Firestore SDK tương ứng.
+/// Service quản lý Sessions và Chat Messages kết nối trực tiếp Firebase Cloud Functions & Firestore
+/// Có cơ chế Fallback thông minh giúp UI hoạt động mượt mà cả khi online lẫn offline.
 class SessionService {
   static final SessionService instance = SessionService._internal();
   SessionService._internal() {
@@ -23,46 +25,84 @@ class SessionService {
   final Map<String, List<ChatMessage>> _messagesStore = {};
   final Map<String, StreamController<List<ChatMessage>>> _messageControllers = {};
 
-  /// Lắng nghe danh sách sessions của người dùng (tương đương Firestore collection 'sessions')
+  /// Lắng nghe danh sách sessions của người dùng (kết nối Firestore collection 'sessions')
   Stream<List<SessionModel>> streamUserSessions(String userId) {
+    try {
+      FirebaseFirestore.instance
+          .collection('sessions')
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .listen(
+        (snap) {
+          final firestoreSessions = snap.docs.map((d) {
+            return SessionModel.fromMap(d.data(), id: d.id);
+          }).toList();
+
+          if (firestoreSessions.isNotEmpty) {
+            // Giữ lại seed data nếu muốn tham khảo, hoặc hiển thị ca bệnh từ Firestore
+            for (final fs in firestoreSessions) {
+              final idx = _sessions.indexWhere((s) => s.id == fs.id);
+              if (idx != -1) {
+                _sessions[idx] = fs;
+              } else {
+                _sessions.insert(0, fs);
+              }
+            }
+            _sessionsController.add(List.unmodifiable(_sessions));
+          }
+        },
+        onError: (err) {
+          debugPrint('[SessionService] Lắng nghe sessions Firestore lỗi: $err');
+        },
+      );
+    } catch (e) {
+      debugPrint('[SessionService] Chưa thể kết nối Firestore sessions: $e');
+    }
+
     // Gửi ngay danh sách hiện tại
     scheduleMicrotask(() {
       _sessionsController.add(List.unmodifiable(_sessions));
     });
     return _sessionsController.stream;
-
-    /*
-    // KHI ĐÃ SET UP FIRESTORE THÀNH CÔNG:
-    return FirebaseFirestore.instance
-        .collection('sessions')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => SessionModel.fromMap(d.data(), id: d.id)).toList());
-    */
   }
 
-  /// Lắng nghe tin nhắn theo thời gian thực (tương đương Firestore subcollection 'sessions/{sessionId}/messages')
+  /// Lắng nghe tin nhắn theo thời gian thực (kết nối Firestore subcollection 'sessions/{sessionId}/messages')
   Stream<List<ChatMessage>> streamMessages(String sessionId) {
     if (!_messageControllers.containsKey(sessionId)) {
       _messageControllers[sessionId] = StreamController<List<ChatMessage>>.broadcast();
     }
+
+    try {
+      FirebaseFirestore.instance
+          .collection('sessions')
+          .doc(sessionId)
+          .collection('messages')
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .listen(
+        (snap) {
+          if (snap.docs.isNotEmpty) {
+            final msgs = snap.docs.map((d) {
+              return ChatMessage.fromMap(d.data(), id: d.id);
+            }).toList();
+
+            _messagesStore[sessionId] = msgs;
+            _messageControllers[sessionId]?.add(List.unmodifiable(msgs));
+          }
+        },
+        onError: (err) {
+          debugPrint('[SessionService] Lắng nghe messages Firestore lỗi: $err');
+        },
+      );
+    } catch (e) {
+      debugPrint('[SessionService] Chưa thể kết nối Firestore messages: $e');
+    }
+
     final messages = _messagesStore[sessionId] ?? [];
     scheduleMicrotask(() {
       _messageControllers[sessionId]?.add(List.unmodifiable(messages));
     });
     return _messageControllers[sessionId]!.stream;
-
-    /*
-    // KHI ĐÃ SET UP FIRESTORE THÀNH CÔNG:
-    return FirebaseFirestore.instance
-        .collection('sessions')
-        .doc(sessionId)
-        .collection('messages')
-        .orderBy('timestamp', descending: false)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => ChatMessage.fromMap(d.data(), id: d.id)).toList());
-    */
   }
 
   /// Gửi tin nhắn qua Cloud Function 'sendChatMessage'
@@ -80,7 +120,7 @@ class SessionService {
       status: MessageStatus.sent,
     );
 
-    // Lưu vào store cục bộ và broadcast
+    // Lưu vào store cục bộ và broadcast ngay (Optimistic UI update)
     _messagesStore.putIfAbsent(sessionId, () => []).add(userMessage);
     _messageControllers[sessionId]?.add(List.unmodifiable(_messagesStore[sessionId]!));
 
@@ -93,21 +133,38 @@ class SessionService {
       _sessionsController.add(List.unmodifiable(_sessions));
     }
 
-    /*
-    // KHI ĐÃ SET UP CLOUD FUNCTION:
+    // 1. Thử gọi trực tiếp Firebase Cloud Function
     try {
-      final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('sendChatMessage');
-      await callable.call({
+      final callable = FirebaseFunctions.instance.httpsCallable('sendChatMessage');
+      final result = await callable.call({
         'sessionId': sessionId,
-        'message': text,
-        'imageUrl': imageUrl,
+        'userMessage': text,
       });
-    } catch (e) {
-      debugPrint('Cloud Function error: $e');
-    }
-    */
 
-    // Giả lập AI phản hồi sau 1.5 giây để kiểm tra trải nghiệm chat thời gian thực
+      final reply = (result.data['reply'] as String?) ?? '';
+      if (reply.isNotEmpty) {
+        final aiMessage = ChatMessage(
+          id: 'msg_ai_${DateTime.now().millisecondsSinceEpoch}',
+          text: reply,
+          isUser: false,
+          timestamp: DateTime.now(),
+          status: MessageStatus.sent,
+        );
+
+        _messagesStore[sessionId]?.add(aiMessage);
+        _messageControllers[sessionId]?.add(List.unmodifiable(_messagesStore[sessionId]!));
+
+        if (sessionIndex != -1) {
+          _sessions[sessionIndex] = _sessions[sessionIndex].copyWith(lastMessage: reply);
+          _sessionsController.add(List.unmodifiable(_sessions));
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('[SessionService] Gọi Cloud Function sendChatMessage lỗi hoặc offline: $e. Dùng fallback giả lập...');
+    }
+
+    // 2. Fallback phản hồi nếu chưa có mạng hoặc lỗi kết nối
     _simulateAiResponse(sessionId, text);
   }
 
@@ -145,7 +202,6 @@ class SessionService {
       _messagesStore[sessionId]?.add(aiMessage);
       _messageControllers[sessionId]?.add(List.unmodifiable(_messagesStore[sessionId]!));
 
-      // Cập nhật session
       final sessionIndex = _sessions.indexWhere((s) => s.id == sessionId);
       if (sessionIndex != -1) {
         _sessions[sessionIndex] = _sessions[sessionIndex].copyWith(
@@ -156,19 +212,91 @@ class SessionService {
     });
   }
 
-  /// Tạo một ca khám mới sau khi hoàn thành bước nén và upload ảnh
+  /// Tạo một ca khám mới: Gọi Firebase Cloud Function 'analyzeInitialSymptom' để phân tích Gemini Triage Card thực tế
   Future<SessionModel> createNewSession({
     required PetType petType,
     required String petName,
     Uint8List? imageBytes,
     String? preliminaryNote,
   }) async {
-    // Đánh giá sơ bộ và phân loại Triage giả lập
+    // 1. Thử gọi trực tiếp Firebase Cloud Function 'analyzeInitialSymptom'
+    try {
+      String? imageBase64;
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        imageBase64 = base64Encode(imageBytes);
+      }
+
+      final callable = FirebaseFunctions.instance.httpsCallable('analyzeInitialSymptom');
+      final result = await callable.call({
+        'petType': petType.displayName, // "Chó" hoặc "Mèo"
+        'symptoms': preliminaryNote ?? 'Không có mô tả chi tiết',
+        'imageBase64': ?imageBase64,
+        'imageMimeType': 'image/jpeg',
+      });
+
+      final data = result.data as Map<dynamic, dynamic>;
+      final sessionId = data['sessionId'] as String;
+      final triageCardMap = (data['triageCard'] as Map<dynamic, dynamic>).cast<String, dynamic>();
+
+      final rawLevel = (triageCardMap['urgencyLevel'] as String?)?.toUpperCase();
+      final level = rawLevel == 'GREEN'
+          ? TriageLevel.green
+          : (rawLevel == 'RED' ? TriageLevel.red : TriageLevel.yellow);
+
+      final summary = (triageCardMap['summary'] as String?) ?? '';
+      final actions = (triageCardMap['immediateActions'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [];
+
+      final newSession = SessionModel(
+        id: sessionId,
+        userId: 'user_current',
+        petName: petName.trim().isEmpty ? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo') : petName.trim(),
+        petType: petType,
+        imageBytes: imageBytes,
+        triageLevel: level,
+        preliminaryAssessment: summary,
+        immediateActions: actions,
+        disclaimer: SessionModel.defaultDisclaimer,
+        createdAt: DateTime.now(),
+        lastMessage: summary,
+        status: 'active',
+      );
+
+      _sessions.insert(0, newSession);
+      _sessionsController.add(List.unmodifiable(_sessions));
+
+      final initialGreeting =
+          'Xin chào bạn! Bác sĩ thú y AI Zoomies đã nhận được thông tin ca khám của ${newSession.petName}.\n\n'
+          '📌 **Nhận định sơ bộ:** $summary\n\n'
+          '👉 Bạn hãy làm theo các bước sơ cứu ở bảng Triage phía trên và gửi câu hỏi bên dưới nếu cần hỗ trợ nhé!';
+
+      final initialMessages = [
+        ChatMessage(
+          id: 'msg_init_${DateTime.now().millisecondsSinceEpoch}',
+          text: initialGreeting,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      _messagesStore[newSession.id] = initialMessages;
+      if (!_messageControllers.containsKey(newSession.id)) {
+        _messageControllers[newSession.id] = StreamController<List<ChatMessage>>.broadcast();
+      }
+      _messageControllers[newSession.id]!.add(initialMessages);
+
+      return newSession;
+    } catch (e) {
+      debugPrint('[SessionService] Gọi Cloud Function analyzeInitialSymptom lỗi hoặc offline: $e. Dùng fallback giả lập...');
+    }
+
+    // 2. Fallback giả lập nếu mạng offline hoặc chưa cấu hình xong
     TriageLevel evaluatedLevel;
     String assessment;
     List<String> actions;
 
-    // Giả định phân loại Triage thông minh dựa trên thông tin nhập
     final note = (preliminaryNote ?? '').toLowerCase();
     if (note.contains('máu') ||
         note.contains('co giật') ||
@@ -225,7 +353,6 @@ class SessionService {
     _sessions.insert(0, newSession);
     _sessionsController.add(List.unmodifiable(_sessions));
 
-    // Khởi tạo các tin nhắn mở đầu của phòng khám
     final initialMessages = [
       ChatMessage(
         id: 'msg_init_1',
@@ -253,7 +380,6 @@ class SessionService {
   }
 
   void _initSeedData() {
-    // 3 ca khám mẫu đại diện cho 3 màu Triage: Đỏ, Vàng, Xanh
     final sessionRed = SessionModel(
       id: 'zm_seed_101',
       userId: 'user_current',
@@ -261,7 +387,7 @@ class SessionService {
       petType: PetType.cat,
       triageLevel: TriageLevel.red,
       preliminaryAssessment:
-          'Mèo thở dốc há miệng, nhịp thở > 50 lần/phút, niêm mạc nướu nhợt nhạt. Nghi ngờ tràn dịch màng phổi hoặc phù phổi cấp tính.',
+          'Mèo nằm bất động, há miệng thở dốc, niêm mạc nướu nhợt nhạt. Nghi ngờ tràn dịch màng phổi hoặc phù phổi cấp tính.',
       immediateActions: [
         'Đặt bé vào lồng vận chuyển thông thoáng, tránh để bé bị hoảng loạn hoặc căng thẳng.',
         'Không ép ăn hay ép uống nước vì nguy cơ sặc phổi rất cao.',
@@ -368,4 +494,3 @@ class SessionService {
     ];
   }
 }
-
