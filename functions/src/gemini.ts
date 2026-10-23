@@ -15,14 +15,15 @@ import { TriageCard, UrgencyLevel } from "./types";
  *    nhằm đảm bảo không bị gián đoạn khi endpoint bị quá tải hoặc thay đổi phiên bản.
  */
 function getCandidateModels(): string[] {
-  const preferred = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const preferred = process.env.GEMINI_MODEL;
   const fallbacks = [
     preferred,
     "gemini-3.5-flash-lite",
-    "gemini-3.5-flash",
     "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    "gemini-1.5-flash",
   ];
-  return Array.from(new Set(fallbacks.filter(Boolean)));
+  return Array.from(new Set(fallbacks.filter(Boolean) as string[]));
 }
 
 /**

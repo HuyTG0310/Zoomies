@@ -220,6 +220,14 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
         ? (_selectedPetType == PetType.dog ? 'Bé Cún' : 'Bé Mèo')
         : _nameController.text.trim();
 
+    // Khởi chạy đồng thời yêu cầu phân tích Triage từ Gemini trong lúc giao diện hiển thị 4 bước loading
+    final sessionFuture = SessionService.instance.createNewSession(
+      petType: _selectedPetType,
+      petName: petName,
+      imageBytes: _compressedResult?.bytes,
+      preliminaryNote: _symptomController.text.trim(),
+    );
+
     // Mở StepLoadingOverlay modal duy trì 3–5 giây
     showDialog(
       context: context,
@@ -228,16 +236,13 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
         return StepLoadingOverlay(
           petName: petName,
           onFinished: () async {
-            // Đóng dialog loading
-            Navigator.of(dialogCtx).pop();
+            // Đợi kết quả hoàn thành từ Gemini
+            final newSession = await sessionFuture;
 
-            // Khởi tạo session trong service
-            final newSession = await SessionService.instance.createNewSession(
-              petType: _selectedPetType,
-              petName: petName,
-              imageBytes: _compressedResult?.bytes,
-              preliminaryNote: _symptomController.text.trim(),
-            );
+            // Đóng dialog loading
+            if (dialogCtx.mounted) {
+              Navigator.of(dialogCtx).pop();
+            }
 
             // Điều hướng sang Màn hình Hybrid (Triage & Chat)
             if (mounted) {
