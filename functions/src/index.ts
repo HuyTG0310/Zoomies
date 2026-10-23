@@ -55,7 +55,7 @@ function resolveGeminiApiKey(): string {
 export const analyzeInitialSymptom = onCall(
   {
     secrets: [geminiApiKeySecret],
-    timeoutSeconds: 60,
+    timeoutSeconds: 120,
     memory: "512MiB",
     cors: true,
   },
@@ -153,7 +153,7 @@ export const analyzeInitialSymptom = onCall(
 export const sendChatMessage = onCall(
   {
     secrets: [geminiApiKeySecret],
-    timeoutSeconds: 60,
+    timeoutSeconds: 120,
     memory: "512MiB",
     cors: true,
   },

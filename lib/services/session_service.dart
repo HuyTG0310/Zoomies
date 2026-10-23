@@ -135,11 +135,16 @@ class SessionService {
 
     // 1. Thử gọi trực tiếp Firebase Cloud Function
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('sendChatMessage');
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'sendChatMessage',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 120)),
+      );
+      debugPrint('🚀 [Zoomies AI] Đang gửi tin nhắn hỏi đáp tới Gemini (sessionId: $sessionId)...');
       final result = await callable.call({
         'sessionId': sessionId,
         'userMessage': text,
       });
+      debugPrint('✅ [Zoomies AI] Nhận được câu trả lời từ Gemini thành công!');
 
       final reply = (result.data['reply'] as String?) ?? '';
       if (reply.isNotEmpty) {
@@ -226,13 +231,23 @@ class SessionService {
         imageBase64 = base64Encode(imageBytes);
       }
 
-      final callable = FirebaseFunctions.instance.httpsCallable('analyzeInitialSymptom');
-      final result = await callable.call({
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'analyzeInitialSymptom',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 120)),
+      );
+      debugPrint('🚀 [Zoomies AI] Đang gửi yêu cầu phân tích Triage tới Gemini (loài: ${petType.displayName})...');
+
+      final Map<String, dynamic> payload = {
         'petType': petType.displayName, // "Chó" hoặc "Mèo"
         'symptoms': preliminaryNote ?? 'Không có mô tả chi tiết',
-        'imageBase64': ?imageBase64,
         'imageMimeType': 'image/jpeg',
-      });
+      };
+      if (imageBase64 != null && imageBase64.isNotEmpty) {
+        payload['imageBase64'] = imageBase64;
+      }
+
+      final result = await callable.call(payload);
+      debugPrint('✅ [Zoomies AI] Phân tích Gemini Triage thành công!');
 
       final data = result.data as Map<dynamic, dynamic>;
       final sessionId = data['sessionId'] as String;
