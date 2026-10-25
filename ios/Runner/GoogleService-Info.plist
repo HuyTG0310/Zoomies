@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyByn7jME6E-5Aag3-Lc-9g1FwzKbXYFBVI</string>
+	<key>GCM_SENDER_ID</key>
+	<string>10289030193</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.example.zoomies</string>
+	<key>PROJECT_ID</key>
+	<string>zoomies-e296d</string>
+	<key>STORAGE_BUCKET</key>
+	<string>zoomies-e296d.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false/>
+	<key>CLIENT_ID</key>
+	<string>10289030193-lffi8bk9mnt5chndq2kvinvl06f7c3vk.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.10289030193-lffi8bk9mnt5chndq2kvinvl06f7c3vk</string>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:10289030193:ios:a2928eb698c88bee412110</string>
+</dict>
+</plist>
+
