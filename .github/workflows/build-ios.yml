@@ -21,13 +21,19 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Prepare Workspace and Disable SwiftPM
+        run: |
+          mkdir -p build/ios/sourcepackages
+          mkdir -p build/ios/SourcePackages
+          flutter config --no-enable-swift-package-manager
+
       - name: Install Dependencies
         run: flutter pub get
 
       - name: Install CocoaPods Dependencies
         run: |
           cd ios
-          pod install --repo-update
+          pod install
           cd ..
 
       - name: Build iOS Application (Unsigned)
