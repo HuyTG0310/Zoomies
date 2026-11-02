@@ -4,6 +4,7 @@ import '../models/pet_type.dart';
 import '../models/session_model.dart';
 import '../models/triage_level.dart';
 import '../services/session_service.dart';
+import '../services/user_identity_service.dart';
 import '../widgets/triage_badge.dart';
 import 'hybrid_triage_chat_screen.dart';
 import 'new_checkup_screen.dart';
@@ -142,7 +143,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           // 3. DANH SÁCH CÁC CA ĐÃ KHÁM (LẮNG NGHE TỪ SESSIONS)
           Expanded(
             child: StreamBuilder<List<SessionModel>>(
-              stream: SessionService.instance.streamUserSessions('user_current'),
+              stream: SessionService.instance.streamUserSessions(UserIdentityService.currentUserId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {

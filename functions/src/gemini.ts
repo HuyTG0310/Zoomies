@@ -38,6 +38,10 @@ const triageSchema: Schema = {
       enum: ["GREEN", "YELLOW", "RED"],
       description: "Mức độ khẩn cấp: GREEN (nhẹ/tại nhà), YELLOW (cần khám sớm), RED (cấp cứu ngay)",
     },
+    isIrrelevantImage: {
+      type: SchemaType.BOOLEAN,
+      description: "True nếu người dùng gửi hình ảnh không liên quan đến thú cưng hoặc tổn thương của thú cưng",
+    },
     summary: {
       type: SchemaType.STRING,
       description: "Nhận định sơ bộ ngắn gọn bằng tiếng Việt (2-3 câu)",
@@ -131,6 +135,7 @@ export function sanitizeTriageCard(raw: any): TriageCard {
 
   return {
     urgencyLevel: validUrgency,
+    isIrrelevantImage: Boolean(raw?.isIrrelevantImage),
     summary:
       typeof raw?.summary === "string" && raw.summary.trim().length > 0
         ? raw.summary.trim()
@@ -150,12 +155,13 @@ export function sanitizeTriageCard(raw: any): TriageCard {
 /**
  * Hàm phân tích triệu chứng ban đầu (Hàm 1: analyzeInitialSymptom)
  * Gọi Gemini với System Prompt số 1 và responseMimeType: "application/json"
+ * Hỗ trợ nhận một hoặc nhiều hình ảnh (tối đa 3 ảnh)
  */
 export async function analyzeInitialSymptomWithGemini(
   apiKey: string,
   petType: string,
   symptoms: string,
-  imagePart?: Part | null
+  imageParts?: (Part | null)[] | Part | null
 ): Promise<TriageCard> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const models = getCandidateModels();
@@ -165,8 +171,12 @@ export async function analyzeInitialSymptomWithGemini(
 - Mô tả triệu chứng ban đầu của chủ nuôi: ${symptoms || "Không có mô tả chi tiết"}`;
 
   const parts: (string | Part)[] = [];
-  if (imagePart) {
-    parts.push(imagePart);
+  if (Array.isArray(imageParts)) {
+    for (const p of imageParts) {
+      if (p) parts.push(p);
+    }
+  } else if (imageParts) {
+    parts.push(imageParts);
   }
   parts.push(promptText);
 

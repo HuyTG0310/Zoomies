@@ -4,6 +4,7 @@ export type UrgencyLevel = "GREEN" | "YELLOW" | "RED";
 
 export interface TriageCard {
   urgencyLevel: UrgencyLevel;
+  isIrrelevantImage?: boolean;
   summary: string;
   possibleCauses: string[];
   immediateActions: string[];
@@ -29,6 +30,7 @@ export interface MessageDocument {
 export interface AnalyzeInitialSymptomData {
   imageUrl?: string;
   imageBase64?: string;
+  imagesBase64?: string[];
   imageMimeType?: string;
   petType: "Chó" | "Mèo" | string;
   symptoms: string;

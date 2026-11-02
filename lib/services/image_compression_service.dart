@@ -51,6 +51,21 @@ class ImageCompressionService {
     }
   }
 
+  /// Chọn nhiều ảnh từ Thư viện (tối đa theo limit)
+  static Future<List<XFile>> pickMultiImage({int limit = 3}) async {
+    try {
+      final List<XFile> pickedFiles = await _picker.pickMultiImage(
+        limit: limit,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+      return pickedFiles;
+    } catch (e) {
+      debugPrint('Error picking multi images: $e');
+      return [];
+    }
+  }
+
   /// Nén ảnh bằng `flutter_image_compress` xuống xấp xỉ ~300 KB
   static Future<CompressedImageResult> compressToTargetSize(
     XFile xfile, {

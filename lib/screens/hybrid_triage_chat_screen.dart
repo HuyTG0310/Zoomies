@@ -199,11 +199,10 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
         child: Column(
           children: [
             // ==========================================
-            // PHẦN TRÊN: TRIAGE CARD (Ghim cố định & Thu gọn được)
+            // PHẦN TRÊN: THANH TRIAGE LEVEL TINH GỌN
             // ==========================================
             TriageHeaderCard(
               session: session,
-              initialExpanded: true,
             ),
 
             // ==========================================
