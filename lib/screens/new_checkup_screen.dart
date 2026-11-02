@@ -18,8 +18,16 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _symptomController = TextEditingController();
 
-  CompressedImageResult? _compressedResult;
+  final List<CompressedImageResult> _compressedImages = [];
   bool _isCompressing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _symptomController.addListener(() {
+      setState(() {});
+    });
+  }
 
   @override
   void dispose() {
@@ -151,42 +159,70 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
     );
   }
 
-  // Chụp/chọn ảnh và nén qua flutter_image_compress xuống ≈ 300KB
+  // Chụp/chọn ảnh và nén qua flutter_image_compress (hỗ trợ tối đa 3 ảnh)
   Future<void> _pickAndCompressImage(ImageSource source) async {
+    if (_compressedImages.length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bạn đã chọn tối đa 3 ảnh.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isCompressing = true;
     });
 
     try {
-      final xfile = await ImageCompressionService.pickImage(source);
-      if (xfile != null) {
-        // Nén ảnh xuống xấp xỉ ~300KB theo yêu cầu
-        final result = await ImageCompressionService.compressToTargetSize(
-          xfile,
-          targetKb: 300,
-        );
-
-        if (mounted) {
-          setState(() {
-            _compressedResult = result;
-            _isCompressing = false;
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFF0E8388),
-              behavior: SnackBarBehavior.floating,
-              content: Text(
-                '✅ Đã nén ảnh: ${result.originalFormatted} ➔ ${result.compressedFormatted} (giảm ${result.compressionRatio.toStringAsFixed(0)}%)',
-              ),
-            ),
+      if (source == ImageSource.camera) {
+        final xfile = await ImageCompressionService.pickImage(source);
+        if (xfile != null) {
+          final result = await ImageCompressionService.compressToTargetSize(
+            xfile,
+            targetKb: 300,
           );
+
+          if (mounted && _compressedImages.length < 3) {
+            setState(() {
+              _compressedImages.add(result);
+              _isCompressing = false;
+            });
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              _isCompressing = false;
+            });
+          }
         }
       } else {
-        if (mounted) {
-          setState(() {
-            _isCompressing = false;
-          });
+        // Thư viện ảnh: cho phép chọn nhiều ảnh (tối đa còn thiếu)
+        final int remaining = 3 - _compressedImages.length;
+        final pickedFiles = await ImageCompressionService.pickMultiImage(limit: remaining);
+        if (pickedFiles.isNotEmpty) {
+          for (final xfile in pickedFiles.take(remaining)) {
+            final result = await ImageCompressionService.compressToTargetSize(
+              xfile,
+              targetKb: 300,
+            );
+            if (_compressedImages.length < 3) {
+              _compressedImages.add(result);
+            }
+          }
+          if (mounted) {
+            setState(() {
+              _isCompressing = false;
+            });
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              _isCompressing = false;
+            });
+          }
         }
       }
     } catch (e) {
@@ -206,11 +242,24 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
 
   // Bắt đầu tạo ca khám + Hiển thị Loading từng bước 3-5s
   void _startCheckup() {
-    if (_compressedResult == null) {
+    final symptoms = _symptomController.text.trim();
+    if (symptoms.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Vui lòng chụp hoặc tải ảnh biểu hiện của thú cưng lên trước.'),
+          content: Text('Vui lòng nhập mô tả triệu chứng của thú cưng để AI đánh giá tình trạng.'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (_compressedImages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng chụp hoặc tải ít nhất 1 ảnh (tối đa 3 ảnh) biểu hiện của bé.'),
           backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
@@ -224,8 +273,9 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
     final sessionFuture = SessionService.instance.createNewSession(
       petType: _selectedPetType,
       petName: petName,
-      imageBytes: _compressedResult?.bytes,
-      preliminaryNote: _symptomController.text.trim(),
+      imageBytes: _compressedImages.first.bytes,
+      imagesBytes: _compressedImages.map((e) => e.bytes).toList(),
+      preliminaryNote: symptoms,
     );
 
     // Mở StepLoadingOverlay modal duy trì 3–5 giây
@@ -333,12 +383,12 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
 
             const SizedBox(height: 20),
 
-            // 2. CHỤP ẢNH / CHỌN ẢNH + NÉN ẢNH
+            // 2. CHỤP ẢNH / CHỌN ẢNH (Tối đa 3 ảnh)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  '2. Chụp / Tải ảnh tổn thương',
+                  '2. Ảnh biểu hiện / tổn thương',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -351,10 +401,10 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
                     color: const Color(0xFF0E8388).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
-                    'Nén tự động ≈300KB',
-                    style: TextStyle(
-                      fontSize: 11,
+                  child: Text(
+                    '${_compressedImages.length}/3 ảnh',
+                    style: const TextStyle(
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF0E8388),
                     ),
@@ -364,19 +414,32 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
             ),
             const SizedBox(height: 10),
 
-            // Khung chọn ảnh & xem trước
+            // Khung chọn ảnh & xem trước (Hỗ trợ tối đa 3 ảnh)
             _buildImagePickerBox(),
 
             const SizedBox(height: 20),
 
-            // 3. MÔ TẢ TRIỆU CHỨNG SƠ BỘ
-            const Text(
-              '3. Mô tả triệu chứng nhận thấy',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
-              ),
+            // 3. MÔ TẢ TRIỆU CHỨNG (BẮT BUỘC)
+            const Row(
+              children: [
+                Text(
+                  '3. Mô tả triệu chứng nhận thấy',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                SizedBox(width: 4),
+                Text(
+                  '* (Bắt buộc)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.redAccent,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 6),
             TextField(
@@ -406,37 +469,46 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
             const SizedBox(height: 28),
 
             // NÚT BẮT ĐẦU ĐÁNH GIÁ (TRIGGER 3-5s LOADING OVERLAY)
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _compressedResult != null ? _startCheckup : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0E8388),
-                  disabledBackgroundColor: const Color(0xFFCBD5E1),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.bolt_rounded, color: Colors.white, size: 22),
-                    const SizedBox(width: 8),
-                    Text(
-                      _compressedResult == null
-                          ? 'Vui lòng chọn ảnh trước'
-                          : 'Bắt Đầu Đánh Giá & Phân Loại Triage',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+            Builder(
+              builder: (context) {
+                final hasSymptoms = _symptomController.text.trim().isNotEmpty;
+                final hasImages = _compressedImages.isNotEmpty;
+                final canSubmit = hasSymptoms && hasImages;
+
+                return SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _startCheckup,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: canSubmit ? const Color(0xFF0E8388) : const Color(0xFF94A3B8),
+                      elevation: canSubmit ? 2 : 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                  ],
-                ),
-              ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.bolt_rounded, color: Colors.white, size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          canSubmit
+                              ? 'Bắt Đầu Đánh Giá & Phân Loại Triage'
+                              : (!hasImages
+                                  ? 'Vui lòng chọn ảnh (tối đa 3)'
+                                  : 'Vui lòng nhập mô tả triệu chứng'),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
 
             const SizedBox(height: 14),
@@ -516,7 +588,7 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
     if (_isCompressing) {
       return Container(
         width: double.infinity,
-        height: 180,
+        height: 140,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -528,128 +600,156 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
             CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0E8388)),
             ),
-            SizedBox(height: 14),
+            SizedBox(height: 12),
             Text(
-              'Đang chạy thuật toán nén ảnh flutter_image_compress...',
+              'Đang xử lý và tối ưu hình ảnh...',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF0E8388),
               ),
             ),
-            SizedBox(height: 4),
-            Text(
-              'Tối ưu kích thước xuống ≈300KB giữ nguyên độ nét chi tiết',
-              style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-            ),
           ],
         ),
       );
     }
 
-    if (_compressedResult != null) {
-      final res = _compressedResult!;
+    if (_compressedImages.isNotEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF0E8388).withValues(alpha: 0.4)),
+          border: Border.all(color: const Color(0xFF0E8388).withValues(alpha: 0.3)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                res.bytes,
-                height: 180,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Thống kê nén ảnh
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFA7F3D0)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (var i = 0; i < _compressedImages.length; i++)
+                  Stack(
                     children: [
-                      const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Ảnh gốc: ${res.originalFormatted}',
-                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF334155)),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          _compressedImages[i].bytes,
+                          width: 95,
+                          height: 95,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                      const Text(' ➔ ', style: TextStyle(color: Color(0xFF94A3B8))),
-                      Text(
-                        'Nén: ${res.compressedFormatted}',
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF065F46),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _compressedImages.removeAt(i);
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Ảnh ${i + 1}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '-${res.compressionRatio.toStringAsFixed(0)}%',
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                if (_compressedImages.length < 3)
+                  InkWell(
+                    onTap: _showImageSourcePicker,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 95,
+                      height: 95,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0E8388).withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFF0E8388).withValues(alpha: 0.35),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.add_photo_alternate_outlined,
+                            color: Color(0xFF0E8388),
+                            size: 26,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Thêm ảnh\n(${_compressedImages.length}/3)',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0E8388),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
             const SizedBox(height: 8),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _showImageSourcePicker,
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('Đổi ảnh khác', style: TextStyle(fontSize: 12.5)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF475569),
-                      side: const BorderSide(color: Color(0xFFCBD5E1)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
+                Text(
+                  'Đã chọn ${_compressedImages.length}/3 ảnh',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
+                TextButton(
                   onPressed: () {
                     setState(() {
-                      _compressedResult = null;
+                      _compressedImages.clear();
                     });
                   },
-                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                  tooltip: 'Xóa ảnh',
+                  child: const Text(
+                    'Xóa tất cả',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             ),
@@ -664,13 +764,12 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: const Color(0xFFCBD5E1),
-            style: BorderStyle.solid,
             width: 1.5,
           ),
         ),
@@ -684,13 +783,13 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
               ),
               child: const Icon(
                 Icons.add_a_photo_rounded,
-                size: 38,
+                size: 34,
                 color: Color(0xFF0E8388),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             const Text(
-              'Chạm để chụp hoặc tải ảnh lên',
+              'Chạm để chụp hoặc tải ảnh lên (Tối đa 3 ảnh)',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -699,7 +798,7 @@ class _NewCheckupScreenState extends State<NewCheckupScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Bắt buộc nén xuống ≈300KB nhằm tăng tốc độ xử lý AI',
+              'Chụp rõ vị trí tổn thương hoặc biểu hiện của thú cưng',
               style: TextStyle(
                 fontSize: 11.5,
                 color: Color(0xFF64748B),

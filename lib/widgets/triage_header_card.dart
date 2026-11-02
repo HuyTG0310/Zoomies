@@ -3,7 +3,10 @@ import '../models/session_model.dart';
 import '../models/triage_level.dart';
 import 'triage_badge.dart';
 
-class TriageHeaderCard extends StatefulWidget {
+/// Thanh hiển thị cấp độ Triage tinh gọn (Compact Triage Bar)
+/// Chỉ hiển thị cấp độ khẩn cấp (Level) và nút cấp cứu (nếu ĐỎ),
+/// không chiếm diện tích màn hình để nhường toàn bộ không gian cho cuộc trò chuyện.
+class TriageHeaderCard extends StatelessWidget {
   final SessionModel session;
   final bool initialExpanded;
   final VoidCallback? onEmergencyCall;
@@ -11,325 +14,272 @@ class TriageHeaderCard extends StatefulWidget {
   const TriageHeaderCard({
     super.key,
     required this.session,
-    this.initialExpanded = true,
+    this.initialExpanded = false,
     this.onEmergencyCall,
   });
 
-  @override
-  State<TriageHeaderCard> createState() => _TriageHeaderCardState();
-}
+  void _showDetailSheet(BuildContext context) {
+    final level = session.triageLevel;
 
-class _TriageHeaderCardState extends State<TriageHeaderCard> {
-  late bool _isExpanded;
-
-  @override
-  void initState() {
-    super.initState();
-    _isExpanded = widget.initialExpanded;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final level = widget.session.triageLevel;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: level.borderColor,
-          width: 2.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: level.primaryColor.withValues(alpha: 0.12),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Banner Top Bar (luôn hiển thị, nhấn vào để mở/thu gọn)
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isExpanded = !_isExpanded;
-              });
-            },
-            borderRadius: BorderRadius.circular(18),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: level.backgroundColor,
-                borderRadius: _isExpanded
-                    ? const BorderRadius.vertical(top: Radius.circular(18))
-                    : BorderRadius.circular(18),
-              ),
-              child: Row(
-                children: [
-                  TriageBadge(level: level, isCompact: !_isExpanded),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _isExpanded
-                          ? 'Bảng Đánh Giá Triage Lâm Sàng'
-                          : widget.session.preliminaryAssessment,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: level.textColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _isExpanded ? 'Thu gọn' : 'Xem chi tiết',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: level.textColor,
-                          ),
-                        ),
-                        Icon(
-                          _isExpanded
-                              ? Icons.keyboard_arrow_up_rounded
-                              : Icons.keyboard_arrow_down_rounded,
-                          size: 16,
-                          color: level.textColor,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Nội dung chi tiết có thể thu gọn (Collapsible Content)
-          if (_isExpanded)
-            Padding(
-              padding: const EdgeInsets.all(14.0),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          maxChildSize: 0.9,
+          minChildSize: 0.4,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Nhận định sơ bộ (Preliminary Assessment)
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0E8388).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.medical_services_outlined,
-                          size: 16,
-                          color: Color(0xFF0E8388),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Nhận định sơ bộ (Preliminary Assessment)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1E293B),
-                        ),
+                      TriageBadge(level: level, isCompact: false),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  if (session.isIrrelevantImage) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFDE68A)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Ảnh tải lên có vẻ không chứa thú cưng hoặc tổn thương thú cưng. Kết quả dựa trên mô tả văn bản.',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  const Text(
+                    '📌 Nhận định sơ bộ:',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
                   ),
                   const SizedBox(height: 6),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Text(
-                      widget.session.preliminaryAssessment,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.45,
-                        color: Color(0xFF334155),
-                        fontWeight: FontWeight.w500,
-                      ),
+                      session.preliminaryAssessment,
+                      style: const TextStyle(fontSize: 13, height: 1.45, color: Color(0xFF334155)),
                     ),
                   ),
+                  const SizedBox(height: 16),
 
-                  const SizedBox(height: 12),
-
-                  // 2. Việc cần làm ngay (Immediate Actions / First Aid)
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: level.primaryColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.checklist_rounded,
-                          size: 16,
-                          color: level.primaryColor,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Việc cần làm ngay (Sơ cứu & Chăm sóc):',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: level.textColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ...widget.session.immediateActions.asMap().entries.map((entry) {
-                    final index = entry.key + 1;
-                    final actionText = entry.value;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: level.primaryColor,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              '$index',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              actionText,
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                height: 1.35,
-                                color: Color(0xFF1E293B),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-
-                  // Nút gọi cấp cứu khẩn cấp nếu là Mức Đỏ
-                  if (level == TriageLevel.red) ...[
+                  if (session.immediateActions.isNotEmpty) ...[
+                    const Text(
+                      '🚨 Các bước xử lý ngay tại nhà:',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                    ),
                     const SizedBox(height: 8),
-                    InkWell(
-                      onTap: widget.onEmergencyCall ??
-                          () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Đang kết nối trung tâm cấp cứu thú y 24/7 gần nhất...'),
-                                backgroundColor: Color(0xFFEF4444),
-                              ),
-                            );
-                          },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFEF4444).withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                    for (var i = 0; i < session.immediateActions.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.phone_in_talk_rounded, color: Colors.white, size: 18),
-                            SizedBox(width: 8),
-                            Text(
-                              'GỌI CẤP CỨU THÚ Y NGAY (24/7)',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                                letterSpacing: 0.3,
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: level.primaryColor,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                '${i + 1}',
+                                style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                session.immediateActions[i],
+                                style: const TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF1E293B)),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
                   ],
 
-                  const SizedBox(height: 10),
-
-                  // 3. Dòng chữ Disclaimer (Miễn trừ trách nhiệm y tế)
+                  const SizedBox(height: 16),
                   Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.info_outline_rounded,
-                          size: 15,
-                          color: Color(0xFF64748B),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            widget.session.disclaimer,
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              color: Color(0xFF475569),
-                              height: 1.35,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      session.disclaimer,
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), height: 1.4),
                     ),
                   ),
                 ],
               ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final level = session.triageLevel;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: level.backgroundColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: level.borderColor,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: level.primaryColor.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Badge hiển thị Cấp độ Triage tinh gọn
+          TriageBadge(level: level, isCompact: true),
+          const SizedBox(width: 8),
+
+          // Cảnh báo nếu ảnh không liên quan
+          if (session.isIrrelevantImage)
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: const Text(
+                'Ảnh không liên quan',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+              ),
             ),
+
+          Expanded(
+            child: Text(
+              level == TriageLevel.red
+                  ? 'Cần cấp cứu khẩn cấp!'
+                  : (level == TriageLevel.yellow ? 'Theo dõi sát' : 'Ổn định tại nhà'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: level.textColor,
+              ),
+            ),
+          ),
+
+          // Nút gọi cấp cứu khẩn cấp nếu là Mức ĐỎ
+          if (level == TriageLevel.red) ...[
+            InkWell(
+              onTap: () {
+                if (onEmergencyCall != null) {
+                  onEmergencyCall!();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Đang kết nối tổng đài cấp cứu thú y: 1900 6868...'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.phone_in_talk_rounded, size: 14, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'Cấp cứu',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+
+          // Nút xem chi tiết Triage dạng Modal Sheet
+          InkWell(
+            onTap: () => _showDetailSheet(context),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.8),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.info_outline_rounded,
+                size: 16,
+                color: level.textColor,
+              ),
+            ),
+          ),
         ],
       ),
     );

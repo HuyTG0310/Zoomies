@@ -7,6 +7,7 @@ import '../models/chat_message.dart';
 import '../models/pet_type.dart';
 import '../models/session_model.dart';
 import '../models/triage_level.dart';
+import 'user_identity_service.dart';
 
 /// Service quản lý Sessions và Chat Messages kết nối trực tiếp Firebase Cloud Functions & Firestore
 /// Có cơ chế Fallback thông minh giúp UI hoạt động mượt mà cả khi online lẫn offline.
@@ -25,11 +26,17 @@ class SessionService {
   final Map<String, List<ChatMessage>> _messagesStore = {};
   final Map<String, StreamController<List<ChatMessage>>> _messageControllers = {};
 
-  /// Lắng nghe danh sách sessions của người dùng (kết nối Firestore collection 'sessions')
+  /// Lắng nghe danh sách sessions của người dùng/thiết bị (kết nối Firestore collection 'sessions')
+  /// Phân quyền theo Device ID hoặc User ID đảm bảo bảo mật và tách biệt lịch sử từng người.
   Stream<List<SessionModel>> streamUserSessions(String userId) {
+    final effectiveUserId = userId.trim().isNotEmpty
+        ? userId.trim()
+        : UserIdentityService.currentUserId;
+
     try {
       FirebaseFirestore.instance
           .collection('sessions')
+          .where('userId', isEqualTo: effectiveUserId)
           .orderBy('createdAt', descending: true)
           .snapshots()
           .listen(
@@ -39,20 +46,17 @@ class SessionService {
           }).toList();
 
           if (firestoreSessions.isNotEmpty) {
-            // Giữ lại seed data nếu muốn tham khảo, hoặc hiển thị ca bệnh từ Firestore
-            for (final fs in firestoreSessions) {
-              final idx = _sessions.indexWhere((s) => s.id == fs.id);
-              if (idx != -1) {
-                _sessions[idx] = fs;
-              } else {
-                _sessions.insert(0, fs);
-              }
-            }
+            _sessions.clear();
+            _sessions.addAll(firestoreSessions);
+            _sessionsController.add(List.unmodifiable(_sessions));
+          } else {
+            // Nếu người dùng/thiết bị này chưa có ca khám nào, hiển thị danh sách demo seed data
             _sessionsController.add(List.unmodifiable(_sessions));
           }
         },
         onError: (err) {
           debugPrint('[SessionService] Lắng nghe sessions Firestore lỗi: $err');
+          _sessionsController.add(List.unmodifiable(_sessions));
         },
       );
     } catch (e) {
@@ -222,28 +226,38 @@ class SessionService {
     required PetType petType,
     required String petName,
     Uint8List? imageBytes,
+    List<Uint8List>? imagesBytes,
     String? preliminaryNote,
   }) async {
+    final currentUid = UserIdentityService.currentUserId;
+    final List<Uint8List> allImages = [];
+    if (imagesBytes != null && imagesBytes.isNotEmpty) {
+      allImages.addAll(imagesBytes.take(3));
+    } else if (imageBytes != null && imageBytes.isNotEmpty) {
+      allImages.add(imageBytes);
+    }
+
+    final Uint8List? primaryImage = allImages.isNotEmpty ? allImages.first : null;
+
     // 1. Thử gọi trực tiếp Firebase Cloud Function 'analyzeInitialSymptom'
     try {
-      String? imageBase64;
-      if (imageBytes != null && imageBytes.isNotEmpty) {
-        imageBase64 = base64Encode(imageBytes);
-      }
+      final List<String> imagesBase64 = allImages.map((b) => base64Encode(b)).toList();
 
       final callable = FirebaseFunctions.instance.httpsCallable(
         'analyzeInitialSymptom',
         options: HttpsCallableOptions(timeout: const Duration(seconds: 120)),
       );
-      debugPrint('🚀 [Zoomies AI] Đang gửi yêu cầu phân tích Triage tới Gemini (loài: ${petType.displayName})...');
+      debugPrint('🚀 [Zoomies AI] Đang gửi yêu cầu phân tích Triage (${allImages.length} ảnh) tới Gemini (loài: ${petType.displayName})...');
 
       final Map<String, dynamic> payload = {
+        'userId': currentUid,
         'petType': petType.displayName, // "Chó" hoặc "Mèo"
         'symptoms': preliminaryNote ?? 'Không có mô tả chi tiết',
         'imageMimeType': 'image/jpeg',
       };
-      if (imageBase64 != null && imageBase64.isNotEmpty) {
-        payload['imageBase64'] = imageBase64;
+      if (imagesBase64.isNotEmpty) {
+        payload['imagesBase64'] = imagesBase64;
+        payload['imageBase64'] = imagesBase64.first;
       }
 
       final result = await callable.call(payload);
@@ -258,19 +272,30 @@ class SessionService {
           ? TriageLevel.green
           : (rawLevel == 'RED' ? TriageLevel.red : TriageLevel.yellow);
 
+      final isIrrelevant = (triageCardMap['isIrrelevantImage'] as bool?) ?? false;
       final summary = (triageCardMap['summary'] as String?) ?? '';
       final actions = (triageCardMap['immediateActions'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [];
+      final causes = (triageCardMap['possibleCauses'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [];
+      final vetQuestions = (triageCardMap['vetQuestions'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           [];
 
       final newSession = SessionModel(
         id: sessionId,
-        userId: 'user_current',
+        userId: currentUid,
         petName: petName.trim().isEmpty ? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo') : petName.trim(),
         petType: petType,
-        imageBytes: imageBytes,
+        imageBytes: primaryImage,
+        imagesBytesList: allImages,
         triageLevel: level,
+        isIrrelevantImage: isIrrelevant,
         preliminaryAssessment: summary,
         immediateActions: actions,
         disclaimer: SessionModel.defaultDisclaimer,
@@ -282,15 +307,40 @@ class SessionService {
       _sessions.insert(0, newSession);
       _sessionsController.add(List.unmodifiable(_sessions));
 
-      final initialGreeting =
-          'Xin chào bạn! Bác sĩ thú y AI Zoomies đã nhận được thông tin ca khám của ${newSession.petName}.\n\n'
-          '📌 **Nhận định sơ bộ:** $summary\n\n'
-          '👉 Bạn hãy làm theo các bước sơ cứu ở bảng Triage phía trên và gửi câu hỏi bên dưới nếu cần hỗ trợ nhé!';
+      // Soạn tin nhắn mở đầu chi tiết hiển thị trực tiếp trong khung chat
+      final buffer = StringBuffer();
+      buffer.writeln('Xin chào bạn! Tôi là Trợ lý Sức khỏe Thú cưng Zoomies.');
+      buffer.writeln('Dưới đây là kết quả phân tích đánh giá ban đầu cho **${newSession.petName}**:');
+      buffer.writeln();
+      buffer.writeln('🏥 **MỨC ĐỘ KHẨN CẤP:** ${level.label}');
+      if (isIrrelevant) {
+        buffer.writeln('\n⚠️ **CẢNH BÁO:** Hình ảnh bạn cung cấp có vẻ không liên quan đến thú cưng. Kết quả dưới đây chỉ dựa trên mô tả triệu chứng của bạn.');
+      }
+      buffer.writeln('\n📌 **Nhận định sơ bộ:**\n$summary');
+      if (causes.isNotEmpty) {
+        buffer.writeln('\n🔍 **Nguyên nhân có thể xảy ra:**');
+        for (final c in causes) {
+          buffer.writeln('• $c');
+        }
+      }
+      if (actions.isNotEmpty) {
+        buffer.writeln('\n🚨 **Các bước xử lý ngay tại nhà:**');
+        for (var i = 0; i < actions.length; i++) {
+          buffer.writeln('${i + 1}. ${actions[i]}');
+        }
+      }
+      if (vetQuestions.isNotEmpty) {
+        buffer.writeln('\n💬 **Gợi ý câu hỏi khi gặp Bác sĩ thú y:**');
+        for (final q in vetQuestions) {
+          buffer.writeln('• $q');
+        }
+      }
+      buffer.writeln('\n👉 Bạn có thể đặt câu hỏi bên dưới hoặc cung cấp thêm diễn biến của bé để tôi hỗ trợ thêm nhé!');
 
       final initialMessages = [
         ChatMessage(
           id: 'msg_init_${DateTime.now().millisecondsSinceEpoch}',
-          text: initialGreeting,
+          text: buffer.toString(),
           isUser: false,
           timestamp: DateTime.now(),
         ),
@@ -311,6 +361,7 @@ class SessionService {
     TriageLevel evaluatedLevel;
     String assessment;
     List<String> actions;
+    List<String> causes;
 
     final note = (preliminaryNote ?? '').toLowerCase();
     if (note.contains('máu') ||
@@ -320,6 +371,10 @@ class SessionService {
       evaluatedLevel = TriageLevel.red;
       assessment =
           'Phát hiện dấu hiệu nguy hiểm cấp tính (chảy máu hoặc suy hô hấp/thần kinh). Nguy cơ sốc hoặc suy đa tạng nếu không can thiệp kịp thời.';
+      causes = [
+        'Chấn thương cơ học hoặc tổn thương nội tạng',
+        'Nhiễm độc cấp tính hoặc biến chứng hô hấp nghiêm trọng',
+      ];
       actions = [
         'Giữ thú cưng nằm yên ở nơi thoáng khí, không di chuyển mạnh.',
         'Dùng gạc sạch ấn nhẹ cầm máu nếu có vết thương hở.',
@@ -333,6 +388,10 @@ class SessionService {
       evaluatedLevel = TriageLevel.yellow;
       assessment =
           'Tổn thương da liễu dạng viêm tiếp xúc hoặc nấm bề mặt biểu bì. Vết đỏ có xu hướng lan rộng do thú cưng cào gãi liên tục.';
+      causes = [
+        'Nhiễm nấm da (Microsporum canis / Trichophyton)',
+        'Viêm da dị ứng thời tiết hoặc ký sinh trùng ngoài da (ve, bọ chét)',
+      ];
       actions = [
         'Đeo loa chống liếm (Elizabeth collar) ngay lập tức để hạn chế tổn thương.',
         'Vệ sinh nhẹ bằng gạc tẩm nước muối sinh lý NaCl 0.9%, để khô tự nhiên.',
@@ -343,6 +402,10 @@ class SessionService {
       evaluatedLevel = TriageLevel.green;
       assessment =
           'Triệu chứng nhẹ tại chỗ, thể trạng toàn thân tương đối ổn định. Chưa phát hiện dấu hiệu đe dọa sinh mạng tức thì.';
+      causes = [
+        'Kích ứng nhẹ do thức ăn hoặc va quẹt nông',
+        'Rối loạn tiêu hóa thoáng qua',
+      ];
       actions = [
         'Tiếp tục theo dõi nhiệt độ cơ thể và lượng thức ăn tiêu thụ trong 24h.',
         'Giữ môi trường sống sạch sẽ, ấm áp và thoáng gió.',
@@ -352,34 +415,47 @@ class SessionService {
 
     final newSession = SessionModel(
       id: 'zm_${DateTime.now().millisecondsSinceEpoch}',
-      userId: 'user_current',
+      userId: currentUid,
       petName: petName.trim().isEmpty ? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo') : petName.trim(),
       petType: petType,
-      imageBytes: imageBytes,
+      imageBytes: primaryImage,
+      imagesBytesList: allImages,
       triageLevel: evaluatedLevel,
       preliminaryAssessment: assessment,
       immediateActions: actions,
       disclaimer: SessionModel.defaultDisclaimer,
       createdAt: DateTime.now(),
-      lastMessage: 'Đã hoàn tất phân loại Triage ban đầu',
+      lastMessage: assessment,
       status: 'active',
     );
 
     _sessions.insert(0, newSession);
     _sessionsController.add(List.unmodifiable(_sessions));
 
+    final fallbackBuffer = StringBuffer();
+    fallbackBuffer.writeln('Xin chào bạn! Tôi là Trợ lý Sức khỏe Thú cưng Zoomies.');
+    fallbackBuffer.writeln('Dưới đây là kết quả phân tích đánh giá ban đầu cho **${newSession.petName}**:');
+    fallbackBuffer.writeln();
+    fallbackBuffer.writeln('🏥 **MỨC ĐỘ KHẨN CẤP:** ${evaluatedLevel.label}');
+    fallbackBuffer.writeln('\n📌 **Nhận định sơ bộ:**\n$assessment');
+    if (causes.isNotEmpty) {
+      fallbackBuffer.writeln('\n🔍 **Nguyên nhân có thể xảy ra:**');
+      for (final c in causes) {
+        fallbackBuffer.writeln('• $c');
+      }
+    }
+    if (actions.isNotEmpty) {
+      fallbackBuffer.writeln('\n🚨 **Các bước xử lý ngay tại nhà:**');
+      for (var i = 0; i < actions.length; i++) {
+        fallbackBuffer.writeln('${i + 1}. ${actions[i]}');
+      }
+    }
+    fallbackBuffer.writeln('\n👉 Bạn có thể gửi thêm câu hỏi bên dưới nếu cần hỗ trợ nhé!');
+
     final initialMessages = [
       ChatMessage(
-        id: 'msg_init_1',
-        text:
-            'Xin chào bạn! Bác sĩ thú y AI Zoomies đã nhận được hình ảnh và thông tin của ${newSession.petName}. Ca khám đã được xếp mức: ${evaluatedLevel.label.toUpperCase()}.',
-        isUser: false,
-        timestamp: DateTime.now().subtract(const Duration(seconds: 1)),
-      ),
-      ChatMessage(
-        id: 'msg_init_2',
-        text:
-            '📌 Nhận định sơ bộ: ${newSession.preliminaryAssessment}\n\n👉 Bạn hãy làm theo các bước sơ cứu ở bảng Triage phía trên và gửi thêm câu hỏi nếu cần trợ giúp nhé!',
+        id: 'msg_init_${DateTime.now().millisecondsSinceEpoch}',
+        text: fallbackBuffer.toString(),
         isUser: false,
         timestamp: DateTime.now(),
       ),
