@@ -29,6 +29,7 @@ enum UrgencyLevel {
 
 class TriageCard {
   final UrgencyLevel urgencyLevel;
+  final bool isIrrelevantImage;
   final String summary;
   final List<String> possibleCauses;
   final List<String> immediateActions;
@@ -36,6 +37,7 @@ class TriageCard {
 
   const TriageCard({
     required this.urgencyLevel,
+    this.isIrrelevantImage = false,
     required this.summary,
     required this.possibleCauses,
     required this.immediateActions,
@@ -45,6 +47,7 @@ class TriageCard {
   factory TriageCard.fromMap(Map<String, dynamic> map) {
     return TriageCard(
       urgencyLevel: UrgencyLevel.fromString(map['urgencyLevel'] as String?),
+      isIrrelevantImage: (map['isIrrelevantImage'] as bool?) ?? false,
       summary: (map['summary'] as String?) ?? '',
       possibleCauses: (map['possibleCauses'] as List<dynamic>?)
               ?.map((e) => e.toString())
@@ -64,6 +67,7 @@ class TriageCard {
   Map<String, dynamic> toMap() {
     return {
       'urgencyLevel': urgencyLevel.toFormattedString(),
+      'isIrrelevantImage': isIrrelevantImage,
       'summary': summary,
       'possibleCauses': possibleCauses,
       'immediateActions': immediateActions,

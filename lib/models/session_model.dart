@@ -9,7 +9,9 @@ class SessionModel {
   final PetType petType;
   final String? imageUrl;
   final Uint8List? imageBytes;
+  final List<Uint8List>? imagesBytesList;
   final TriageLevel triageLevel;
+  final bool isIrrelevantImage;
   final String preliminaryAssessment;
   final List<String> immediateActions;
   final String disclaimer;
@@ -24,7 +26,9 @@ class SessionModel {
     required this.petType,
     this.imageUrl,
     this.imageBytes,
+    this.imagesBytesList,
     required this.triageLevel,
+    this.isIrrelevantImage = false,
     required this.preliminaryAssessment,
     required this.immediateActions,
     required this.disclaimer,
@@ -40,7 +44,9 @@ class SessionModel {
     PetType? petType,
     String? imageUrl,
     Uint8List? imageBytes,
+    List<Uint8List>? imagesBytesList,
     TriageLevel? triageLevel,
+    bool? isIrrelevantImage,
     String? preliminaryAssessment,
     List<String>? immediateActions,
     String? disclaimer,
@@ -55,7 +61,9 @@ class SessionModel {
       petType: petType ?? this.petType,
       imageUrl: imageUrl ?? this.imageUrl,
       imageBytes: imageBytes ?? this.imageBytes,
+      imagesBytesList: imagesBytesList ?? this.imagesBytesList,
       triageLevel: triageLevel ?? this.triageLevel,
+      isIrrelevantImage: isIrrelevantImage ?? this.isIrrelevantImage,
       preliminaryAssessment: preliminaryAssessment ?? this.preliminaryAssessment,
       immediateActions: immediateActions ?? this.immediateActions,
       disclaimer: disclaimer ?? this.disclaimer,
@@ -73,6 +81,7 @@ class SessionModel {
       'petType': petType.displayName,
       'imageUrl': imageUrl,
       'triageLevel': triageLevel.name,
+      'isIrrelevantImage': isIrrelevantImage,
       'preliminaryAssessment': preliminaryAssessment,
       'immediateActions': immediateActions,
       'disclaimer': disclaimer,
@@ -111,6 +120,10 @@ class SessionModel {
         ? TriageLevel.green
         : (rawLevel == 'RED' ? TriageLevel.red : TriageLevel.yellow);
 
+    final isIrrelevant = (triageCard?['isIrrelevantImage'] as bool?) ??
+        (map['isIrrelevantImage'] as bool?) ??
+        false;
+
     final summary = (triageCard?['summary'] ?? map['preliminaryAssessment'] ?? map['initialSymptoms'] ?? '') as String;
     final rawActions = triageCard?['immediateActions'] ?? map['immediateActions'];
     final immediateActions = rawActions is List
@@ -124,6 +137,7 @@ class SessionModel {
       petType: petType,
       imageUrl: map['imageUrl'] as String?,
       triageLevel: triageLevel,
+      isIrrelevantImage: isIrrelevant,
       preliminaryAssessment: summary,
       immediateActions: immediateActions,
       disclaimer: (map['disclaimer'] as String?) ?? defaultDisclaimer,

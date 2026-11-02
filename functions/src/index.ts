@@ -77,12 +77,19 @@ export const analyzeInitialSymptom = onCall(
       );
     }
 
-    // 1. Chuẩn bị ảnh (nếu có: Base64 hoặc từ Storage URL)
-    let imagePart = null;
-    if (imageBase64) {
-      imagePart = parseBase64ImagePart(imageBase64, imageMimeType);
+    // 1. Chuẩn bị ảnh (hỗ trợ tối đa 3 ảnh dạng Base64 hoặc từ Storage URL)
+    const imageParts: import("@google/generative-ai").Part[] = [];
+    if (Array.isArray(data?.imagesBase64) && data.imagesBase64.length > 0) {
+      for (const b64 of data.imagesBase64.slice(0, 3)) {
+        if (b64 && b64.trim().length > 0) {
+          imageParts.push(parseBase64ImagePart(b64, imageMimeType));
+        }
+      }
+    } else if (imageBase64) {
+      imageParts.push(parseBase64ImagePart(imageBase64, imageMimeType));
     } else if (imageUrl) {
-      imagePart = await fetchImagePartFromUrl(imageUrl);
+      const part = await fetchImagePartFromUrl(imageUrl);
+      if (part) imageParts.push(part);
     }
 
     // 2. Gọi Gemini để phân tích Triage Card
@@ -92,7 +99,7 @@ export const analyzeInitialSymptom = onCall(
         apiKey,
         petType,
         symptoms,
-        imagePart
+        imageParts
       );
     } catch (error: any) {
       console.error("[analyzeInitialSymptom] Lỗi Gemini:", error);
@@ -118,12 +125,50 @@ export const analyzeInitialSymptom = onCall(
 
     await sessionRef.set(sessionDocData);
 
-    // 4. Lưu tin nhắn mở đầu vào sub-collection 'sessions/{sessionId}/messages'
-    const openingGreeting =
+    // 4. Lưu tin nhắn mở đầu chi tiết vào sub-collection 'sessions/{sessionId}/messages'
+    let levelEmoji = "🟢";
+    let levelTitle = "Mức Xanh: Không khẩn cấp (Chăm sóc tại nhà)";
+    if (triageCard.urgencyLevel === "RED") {
+      levelEmoji = "🔴";
+      levelTitle = "Mức Đỏ: CẤP CỨU KHẨN CẤP!";
+    } else if (triageCard.urgencyLevel === "YELLOW") {
+      levelEmoji = "🟡";
+      levelTitle = "Mức Vàng: Cần theo dõi sát / Đi khám sớm";
+    }
+
+    let irrelevantWarning = "";
+    if (triageCard.isIrrelevantImage) {
+      irrelevantWarning = `\n\n⚠️ **CẢNH BÁO:** Hình ảnh bạn gửi có vẻ không liên quan đến thú cưng hoặc tổn thương của bé. Kết quả phân tích dưới đây chỉ dựa trên mô tả văn bản của bạn. Vui lòng cung cấp ảnh chụp rõ nét của bé để nhận được đánh giá chính xác nhất.`;
+    }
+
+    const causesText =
+      triageCard.possibleCauses && triageCard.possibleCauses.length > 0
+        ? triageCard.possibleCauses.map((c) => `• ${c}`).join("\n")
+        : "• Đang theo dõi thêm diễn biến lâm sàng.";
+
+    const actionsText =
+      triageCard.immediateActions && triageCard.immediateActions.length > 0
+        ? triageCard.immediateActions.map((a, idx) => `${idx + 1}. ${a}`).join("\n")
+        : "1. Tiếp tục theo dõi các biểu hiện của bé.";
+
+    const questionsText =
+      triageCard.vetQuestions && triageCard.vetQuestions.length > 0
+        ? triageCard.vetQuestions.map((q) => `• ${q}`).join("\n")
+        : "";
+
+    let openingGreeting =
       `Xin chào! Tôi là Trợ lý Sức khỏe Thú cưng Zoomies.\n` +
-      `Tôi đã tạo Thẻ đánh giá sơ bộ (Triage Card) ở phía trên dựa trên thông tin bạn cung cấp (Mức độ: ${triageCard.urgencyLevel}).\n\n` +
-      `📌 **Tóm tắt nhanh:** ${triageCard.summary}\n\n` +
-      `Bạn có thể đặt câu hỏi bên dưới hoặc cung cấp thêm diễn biến của bé để tôi hỗ trợ thêm nhé!`;
+      `Dưới đây là kết quả phân tích đánh giá ban đầu cho **${petType}** của bạn:\n\n` +
+      `🏥 **MỨC ĐỘ:** ${levelEmoji} **${levelTitle}**${irrelevantWarning}\n\n` +
+      `📌 **Nhận định sơ bộ:**\n${triageCard.summary}\n\n` +
+      `🔍 **Nguyên nhân có thể xảy ra:**\n${causesText}\n\n` +
+      `🚨 **Các bước xử lý ngay tại nhà:**\n${actionsText}\n\n`;
+
+    if (questionsText) {
+      openingGreeting += `💬 **Gợi ý câu hỏi khi gặp Bác sĩ thú y:**\n${questionsText}\n\n`;
+    }
+
+    openingGreeting += `👉 Bạn có thể đặt câu hỏi bên dưới hoặc cung cấp thêm diễn biến của bé để tôi hỗ trợ thêm nhé!`;
 
     await sessionRef.collection("messages").add({
       role: "model",
