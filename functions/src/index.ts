@@ -64,6 +64,7 @@ export const analyzeInitialSymptom = onCall(
     const apiKey = resolveGeminiApiKey();
 
     const petType = data?.petType?.trim() || "Chó/Mèo";
+    const petName = data?.petName?.trim() || (petType === "Chó" ? "Bé Cún" : "Bé Mèo");
     const symptoms = data?.symptoms?.trim() || "";
     const imageUrl = data?.imageUrl?.trim() || "";
     const imageBase64 = data?.imageBase64?.trim() || "";
@@ -99,7 +100,8 @@ export const analyzeInitialSymptom = onCall(
         apiKey,
         petType,
         symptoms,
-        imageParts
+        imageParts,
+        petName
       );
     } catch (error: any) {
       console.error("[analyzeInitialSymptom] Lỗi Gemini:", error);
@@ -115,6 +117,7 @@ export const analyzeInitialSymptom = onCall(
 
     const sessionDocData: SessionDocument = {
       userId,
+      petName,
       petType,
       imageUrl,
       initialSymptoms: symptoms,
@@ -158,7 +161,7 @@ export const analyzeInitialSymptom = onCall(
 
     let openingGreeting =
       `Xin chào! Tôi là Trợ lý Sức khỏe Thú cưng Zoomies.\n` +
-      `Dưới đây là kết quả phân tích đánh giá ban đầu cho **${petType}** của bạn:\n\n` +
+      `Dưới đây là kết quả phân tích đánh giá ban đầu cho **${petName}**:\n\n` +
       `🏥 **MỨC ĐỘ:** ${levelEmoji} **${levelTitle}**${irrelevantWarning}\n\n` +
       `📌 **Nhận định sơ bộ:**\n${triageCard.summary}\n\n` +
       `🔍 **Nguyên nhân có thể xảy ra:**\n${causesText}\n\n` +

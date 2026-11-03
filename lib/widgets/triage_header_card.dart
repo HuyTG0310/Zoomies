@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import '../models/session_model.dart';
 import '../models/triage_level.dart';
+import '../theme/app_colors.dart';
 import 'triage_badge.dart';
 
-/// Thanh hiển thị cấp độ Triage tinh gọn (Compact Triage Bar)
-/// Chỉ hiển thị cấp độ khẩn cấp (Level) và nút cấp cứu (nếu ĐỎ),
-/// không chiếm diện tích màn hình để nhường toàn bộ không gian cho cuộc trò chuyện.
+/// Thanh hiển thị cấp độ Triage y tế (Medical Triage Bar)
+/// Cung cấp thông tin trực quan về mức độ khẩn cấp, nút cấp cứu nhanh và xem chi tiết phác đồ.
 class TriageHeaderCard extends StatelessWidget {
   final SessionModel session;
   final bool initialExpanded;
   final VoidCallback? onEmergencyCall;
+  final ValueChanged<String>? onQuestionSelected;
 
   const TriageHeaderCard({
     super.key,
     required this.session,
     this.initialExpanded = false,
     this.onEmergencyCall,
+    this.onQuestionSelected,
   });
 
   void _showDetailSheet(BuildContext context) {
@@ -31,9 +33,9 @@ class TriageHeaderCard extends StatelessWidget {
       builder: (ctx) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.7,
-          maxChildSize: 0.9,
-          minChildSize: 0.4,
+          initialChildSize: 0.75,
+          maxChildSize: 0.92,
+          minChildSize: 0.45,
           builder: (context, scrollController) {
             return SingleChildScrollView(
               controller: scrollController,
@@ -43,11 +45,11 @@ class TriageHeaderCard extends StatelessWidget {
                 children: [
                   Center(
                     child: Container(
-                      width: 40,
+                      width: 44,
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: const Color(0xFFCBD5E1),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -58,28 +60,83 @@ class TriageHeaderCard extends StatelessWidget {
                       const Spacer(),
                       IconButton(
                         onPressed: () => Navigator.pop(ctx),
-                        icon: const Icon(Icons.close_rounded),
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
                       ),
                     ],
                   ),
                   const SizedBox(height: 14),
+
+                  // Cảnh báo nếu Mức Đỏ (Cấp cứu)
+                  if (level == TriageLevel.red) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_rounded, color: Color(0xFFDC2626), size: 24),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'CẦN ĐƯA ĐI CẤP CỨU NGAY',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF991B1B),
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Tình trạng đe dọa sinh mạng. Đưa bé đến bệnh viện thú y gần nhất!',
+                                  style: TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              if (onEmergencyCall != null) {
+                                onEmergencyCall!();
+                              }
+                            },
+                            icon: const Icon(Icons.call_rounded, size: 16, color: Colors.white),
+                            label: const Text('Gọi 115', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFDC2626),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
 
                   if (session.isIrrelevantImage) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
+                        color: const Color(0xFFFFFBEB),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0xFFFDE68A)),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                          Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Ảnh tải lên có vẻ không chứa thú cưng hoặc tổn thương thú cưng. Kết quả dựa trên mô tả văn bản.',
+                              'Ảnh tải lên chưa rõ tổn thương thú cưng. Kết quả Triage dựa chủ yếu vào mô tả triệu chứng.',
                               style: TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
                             ),
                           ),
@@ -89,31 +146,27 @@ class TriageHeaderCard extends StatelessWidget {
                     const SizedBox(height: 14),
                   ],
 
-                  const Text(
-                    '📌 Nhận định sơ bộ:',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
-                  ),
+                  // Nhận định sơ bộ
+                  _buildSectionHeader(Icons.summarize_rounded, 'Nhận định sơ bộ từ AI:'),
                   const SizedBox(height: 6),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Text(
                       session.preliminaryAssessment,
-                      style: const TextStyle(fontSize: 13, height: 1.45, color: Color(0xFF334155)),
+                      style: const TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF1E293B)),
                     ),
                   ),
                   const SizedBox(height: 16),
 
+                  // Các bước xử lý ngay tại nhà
                   if (session.immediateActions.isNotEmpty) ...[
-                    const Text(
-                      '🚨 Các bước xử lý ngay tại nhà:',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
-                    ),
+                    _buildSectionHeader(Icons.healing_rounded, 'Các bước xử lý ngay tại nhà:'),
                     const SizedBox(height: 8),
                     for (var i = 0; i < session.immediateActions.length; i++)
                       Padding(
@@ -123,38 +176,51 @@ class TriageHeaderCard extends StatelessWidget {
                           children: [
                             Container(
                               margin: const EdgeInsets.only(top: 2),
-                              padding: const EdgeInsets.all(4),
+                              width: 22,
+                              height: 22,
                               decoration: BoxDecoration(
                                 color: level.primaryColor,
                                 shape: BoxShape.circle,
                               ),
-                              child: Text(
-                                '${i + 1}',
-                                style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                              child: Center(
+                                child: Text(
+                                  '${i + 1}',
+                                  style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w800),
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 session.immediateActions[i],
-                                style: const TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF1E293B)),
+                                style: const TextStyle(fontSize: 13, height: 1.45, color: Color(0xFF334155)),
                               ),
                             ),
                           ],
                         ),
                       ),
+                    const SizedBox(height: 16),
                   ],
 
-                  const SizedBox(height: 16),
+                  // Miễn trừ trách nhiệm y tế
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(
-                      session.disclaimer,
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), height: 1.4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.shield_outlined, size: 16, color: Color(0xFF64748B)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            session.disclaimer,
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), height: 1.4),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -166,62 +232,80 @@ class TriageHeaderCard extends StatelessWidget {
     );
   }
 
+  Widget _buildSectionHeader(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.primary),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0F172A),
+            letterSpacing: -0.1,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final level = session.triageLevel;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: level.backgroundColor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: level.borderColor,
-          width: 1.5,
+          width: 1.4,
         ),
         boxShadow: [
           BoxShadow(
             color: level.primaryColor.withValues(alpha: 0.08),
-            blurRadius: 8,
+            blurRadius: 10,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
-          // Badge hiển thị Cấp độ Triage tinh gọn
+          // Badge cấp độ
           TriageBadge(level: level, isCompact: true),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
 
-          // Cảnh báo nếu ảnh không liên quan
-          if (session.isIrrelevantImage)
-            Container(
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: const Text(
-                'Ảnh không liên quan',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
-              ),
-            ),
-
+          // Tóm tắt tình trạng
           Expanded(
-            child: Text(
-              level == TriageLevel.red
-                  ? 'Cần cấp cứu khẩn cấp!'
-                  : (level == TriageLevel.yellow ? 'Theo dõi sát' : 'Ổn định tại nhà'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: level.textColor,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  level == TriageLevel.red
+                      ? 'CẤP CỨU KHẨN CẤP!'
+                      : (level == TriageLevel.yellow ? 'Cần theo dõi sát sao' : 'Thể trạng ổn định'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                    color: level.textColor,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  'Chạm để xem các bước sơ cứu chi tiết',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: level.textColor.withValues(alpha: 0.75),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -234,18 +318,25 @@ class TriageHeaderCard extends StatelessWidget {
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Đang kết nối tổng đài cấp cứu thú y: 1900 6868...'),
+                      content: Text('Đang kết nối hotline cấp cứu thú y 24/7...'),
                       backgroundColor: Colors.red,
                     ),
                   );
                 }
               },
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(8),
+                  color: const Color(0xFFDC2626),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withValues(alpha: 0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -260,22 +351,23 @@ class TriageHeaderCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
           ],
 
-          // Nút xem chi tiết Triage dạng Modal Sheet
+          // Nút mở BottomSheet chi tiết
           InkWell(
             onTap: () => _showDetailSheet(context),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             child: Container(
-              padding: const EdgeInsets.all(5),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8),
-                shape: BoxShape.circle,
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: level.borderColor),
               ),
               child: Icon(
-                Icons.info_outline_rounded,
-                size: 16,
+                Icons.arrow_forward_ios_rounded,
+                size: 13,
                 color: level.textColor,
               ),
             ),

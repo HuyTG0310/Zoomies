@@ -161,12 +161,14 @@ export async function analyzeInitialSymptomWithGemini(
   apiKey: string,
   petType: string,
   symptoms: string,
-  imageParts?: (Part | null)[] | Part | null
+  imageParts?: (Part | null)[] | Part | null,
+  petName?: string
 ): Promise<TriageCard> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const models = getCandidateModels();
 
   const promptText = `Hãy phân loại và phân tích tình trạng ca bệnh thú cưng sau:
+- Tên thú cưng: ${petName || "Chưa rõ tên"}
 - Loài thú cưng: ${petType || "Chó/Mèo"}
 - Mô tả triệu chứng ban đầu của chủ nuôi: ${symptoms || "Không có mô tả chi tiết"}`;
 

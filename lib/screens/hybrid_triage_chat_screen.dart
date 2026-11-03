@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 import '../models/session_model.dart';
 import '../services/session_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/chat_bubble_widget.dart';
 import '../widgets/triage_header_card.dart';
 
@@ -24,7 +25,7 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
 
   final List<String> _quickSuggestions = const [
     '🌡️ Bé có bị sốt không bác sĩ?',
-    '💊 Có nên bôi cồn hay thuốc mỡ không?',
+    '💊 Có nên bôi thuốc sát trùng không?',
     '🍖 Nên cho ăn uống thế nào lúc này?',
     '🏥 Dấu hiệu nào phải đưa đi cấp cứu ngay?',
   ];
@@ -59,16 +60,6 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
     });
 
     try {
-      /*
-      // ĐOẠN CODE GỌI TRỰC TIẾP CLOUD FUNCTION (KHI BẠN ĐÃ SET UP FIREBASE):
-      // final callable = FirebaseFunctions.instance.httpsCallable('sendChatMessage');
-      // await callable.call({
-      //   'sessionId': widget.session.id,
-      //   'text': text,
-      // });
-      */
-
-      // Gọi thông qua SessionService (chuẩn kiến trúc repository)
       await SessionService.instance.sendChatMessage(
         sessionId: widget.session.id,
         text: text,
@@ -97,11 +88,12 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
   Widget build(BuildContext context) {
     final session = widget.session;
     final level = session.triageLevel;
+    final primaryColor = AppColors.primary;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        elevation: 0.8,
+        elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         titleSpacing: 0,
@@ -109,17 +101,17 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
           children: [
             // Avatar thú cưng với viền theo màu Triage
             Container(
-              width: 38,
-              height: 38,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: level.backgroundColor,
-                border: Border.all(color: level.primaryColor, width: 2),
+                border: Border.all(color: level.borderColor, width: 2),
               ),
               child: Center(
                 child: Text(
                   session.petType.emoji,
-                  style: const TextStyle(fontSize: 18),
+                  style: const TextStyle(fontSize: 20),
                 ),
               ),
             ),
@@ -136,23 +128,25 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 15,
+                            fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF0F172A),
+                            letterSpacing: -0.2,
                           ),
                         ),
                       ),
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
                           color: level.backgroundColor,
                           borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: level.borderColor),
                         ),
                         child: Text(
                           level.shortTag,
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.w800,
                             color: level.textColor,
                           ),
@@ -162,12 +156,12 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
                   ),
                   const Row(
                     children: [
-                      Icon(Icons.circle, color: Color(0xFF10B981), size: 7),
-                      SizedBox(width: 4),
+                      CircleAvatar(radius: 3, backgroundColor: Color(0xFF10B981)),
+                      SizedBox(width: 5),
                       Text(
-                        'Phòng khám AI đang trực tuyến',
+                        'Phòng khám AI trực tuyến 24/7',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 11.5,
                           color: Color(0xFF64748B),
                           fontWeight: FontWeight.w500,
                         ),
@@ -179,46 +173,31 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share_outlined, color: Color(0xFF475569)),
-            tooltip: 'Chia sẻ ca khám',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Đã sao chép liên kết ca khám')),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF475569)),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
             // ==========================================
-            // PHẦN TRÊN: THANH TRIAGE LEVEL TINH GỌN
+            // PHẦN TRÊN: THANH TRIAGE LEVEL Y TẾ
             // ==========================================
             TriageHeaderCard(
               session: session,
+              onQuestionSelected: (question) => _handleSendMessage(question),
             ),
 
             // ==========================================
             // PHẦN DƯỚI: KHUNG CHAT (StreamBuilder từ Firestore)
-            // Lắng nghe sessions/{sessionId}/messages
             // ==========================================
             Expanded(
               child: StreamBuilder<List<ChatMessage>>(
-                // Stream lắng nghe trực tiếp từ Firestore subcollection
                 stream: SessionService.instance.streamMessages(session.id),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting &&
                       !snapshot.hasData) {
-                    return const Center(
+                    return Center(
                       child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0E8388)),
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                       ),
                     );
                   }
@@ -252,7 +231,7 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
 
                   return ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.only(top: 8, bottom: 12),
+                    padding: const EdgeInsets.only(top: 10, bottom: 12),
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
                       final msg = messages[index];
@@ -263,38 +242,45 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
               ),
             ),
 
-            // Gợi ý câu hỏi nhanh (Quick Question Chips)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Row(
-                children: _quickSuggestions.map((suggestion) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6.0),
-                    child: ActionChip(
-                      label: Text(
-                        suggestion,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0E8388),
+            // 💡 Gợi ý câu hỏi nhanh (Quick Question Chips)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: _quickSuggestions.map((suggestion) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: InkWell(
+                        onTap: () => _handleSendMessage(suggestion),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Text(
+                            suggestion,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
                         ),
                       ),
-                      backgroundColor: Colors.white,
-                      side: BorderSide(color: const Color(0xFF0E8388).withValues(alpha: 0.3)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      onPressed: () => _handleSendMessage(suggestion),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
 
             // ==========================================
             // THANH NHẬP TIN NHẮN DƯỚI CÙNG
-            // Khi bấm gửi → Gọi Cloud Function sendChatMessage
             // ==========================================
             _buildMessageInputField(),
           ],
@@ -304,38 +290,29 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
   }
 
   Widget _buildMessageInputField() {
+    final primaryColor = AppColors.primary;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: BoxDecoration(
         color: Colors.white,
+        border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
             blurRadius: 10,
-            offset: const Offset(0, -3),
+            offset: const Offset(0, -2),
           ),
         ],
       ),
       child: Row(
         children: [
-          // Nút đính kèm ảnh chụp bổ sung
-          IconButton(
-            icon: const Icon(Icons.add_photo_alternate_outlined),
-            color: const Color(0xFF64748B),
-            tooltip: 'Gửi thêm ảnh',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Tính năng đính kèm thêm ảnh trong chat')),
-              );
-            },
-          ),
-
           // Ô nhập văn bản
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
@@ -346,10 +323,13 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _handleSendMessage(),
                 decoration: const InputDecoration(
-                  hintText: 'Hỏi thêm bác sĩ về triệu chứng...',
-                  hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                  hintText: 'Hỏi thêm bác sĩ về triệu chứng của bé...',
+                  hintStyle: TextStyle(fontSize: 13.5, color: Color(0xFF94A3B8)),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10),
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 11),
+                  filled: false,
                 ),
               ),
             ),
@@ -357,19 +337,17 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
 
           const SizedBox(width: 8),
 
-          // Nút gửi tin nhắn (gọi Cloud Function sendChatMessage)
+          // Nút gửi tin nhắn dạng tròn với gradient
           Container(
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0E8388), Color(0xFF2E4F4F)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
+              gradient: AppColors.primaryGradient,
+              shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0E8388).withValues(alpha: 0.3),
-                  blurRadius: 6,
+                  color: primaryColor.withValues(alpha: 0.3),
+                  blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
               ],
@@ -385,7 +363,7 @@ class _HybridTriageChatScreenState extends State<HybridTriageChatScreen> {
                       ),
                     )
                   : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-              tooltip: 'Gửi qua Cloud Function sendChatMessage',
+              tooltip: 'Gửi tin nhắn',
               onPressed: _isSending ? null : () => _handleSendMessage(),
             ),
           ),

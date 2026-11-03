@@ -13,6 +13,7 @@ export interface TriageCard {
 
 export interface SessionDocument {
   userId: string;
+  petName?: string;
   petType: "Chó" | "Mèo" | string;
   imageUrl: string;
   initialSymptoms: string;
@@ -32,6 +33,7 @@ export interface AnalyzeInitialSymptomData {
   imageBase64?: string;
   imagesBase64?: string[];
   imageMimeType?: string;
+  petName?: string;
   petType: "Chó" | "Mèo" | string;
   symptoms: string;
   userId?: string;

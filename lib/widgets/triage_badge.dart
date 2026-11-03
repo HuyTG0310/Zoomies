@@ -15,7 +15,7 @@ class TriageBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isCompact) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
         decoration: BoxDecoration(
           color: level.backgroundColor,
           borderRadius: BorderRadius.circular(20),
@@ -24,14 +24,15 @@ class TriageBadge extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(level.icon, size: 14, color: level.primaryColor),
-            const SizedBox(width: 4),
+            Icon(level.icon, size: 13, color: level.primaryColor),
+            const SizedBox(width: 4.5),
             Text(
               level.shortTag,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
                 color: level.textColor,
+                letterSpacing: -0.1,
               ),
             ),
           ],
@@ -40,7 +41,7 @@ class TriageBadge extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
         color: level.backgroundColor,
         borderRadius: BorderRadius.circular(24),
@@ -48,7 +49,7 @@ class TriageBadge extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: level.primaryColor.withValues(alpha: 0.12),
-            blurRadius: 8,
+            blurRadius: 10,
             offset: const Offset(0, 2),
           ),
         ],
@@ -57,14 +58,14 @@ class TriageBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(level.icon, size: 18, color: level.primaryColor),
-          const SizedBox(width: 6),
+          const SizedBox(width: 7),
           Text(
             level.label,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 13.5,
               fontWeight: FontWeight.w800,
               color: level.textColor,
-              letterSpacing: 0.2,
+              letterSpacing: -0.1,
             ),
           ),
         ],
