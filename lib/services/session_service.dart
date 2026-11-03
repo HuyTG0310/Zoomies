@@ -42,12 +42,35 @@ class SessionService {
           .listen(
         (snap) {
           final firestoreSessions = snap.docs.map((d) {
-            return SessionModel.fromMap(d.data(), id: d.id);
+            var model = SessionModel.fromMap(d.data(), id: d.id);
+            for (final s in _sessions) {
+              if (s.id == model.id &&
+                  s.petName.isNotEmpty &&
+                  s.petName != 'Bé Cún' &&
+                  s.petName != 'Bé Mèo' &&
+                  (model.petName == 'Bé Cún' || model.petName == 'Bé Mèo')) {
+                model = model.copyWith(petName: s.petName);
+                break;
+              }
+            }
+            return model;
           }).toList();
 
-          if (firestoreSessions.isNotEmpty) {
+          // Tự động khử trùng lặp (Deduplicate) nếu lỡ bấm gửi 2 lần tạo ra 2 ca khám giống hệt nhau
+          final uniqueSessions = <SessionModel>[];
+          for (final session in firestoreSessions) {
+            final isDuplicate = uniqueSessions.any((existing) =>
+                existing.petName == session.petName &&
+                existing.preliminaryAssessment == session.preliminaryAssessment &&
+                existing.createdAt.difference(session.createdAt).inSeconds.abs() <= 60);
+            if (!isDuplicate) {
+              uniqueSessions.add(session);
+            }
+          }
+
+          if (uniqueSessions.isNotEmpty) {
             _sessions.clear();
-            _sessions.addAll(firestoreSessions);
+            _sessions.addAll(uniqueSessions);
             _sessionsController.add(List.unmodifiable(_sessions));
           } else {
             // Nếu người dùng/thiết bị này chưa có ca khám nào, hiển thị danh sách demo seed data
@@ -221,6 +244,18 @@ class SessionService {
     });
   }
 
+  /// Xóa vĩnh viễn một ca khám khỏi Firestore và bộ nhớ
+  Future<void> deleteSession(String sessionId) async {
+    try {
+      await FirebaseFirestore.instance.collection('sessions').doc(sessionId).delete();
+    } catch (e) {
+      debugPrint('[SessionService] Lỗi xóa ca khám trên Firestore: $e');
+    }
+
+    _sessions.removeWhere((s) => s.id == sessionId);
+    _sessionsController.add(List.unmodifiable(_sessions));
+  }
+
   /// Tạo một ca khám mới: Gọi Firebase Cloud Function 'analyzeInitialSymptom' để phân tích Gemini Triage Card thực tế
   Future<SessionModel> createNewSession({
     required PetType petType,
@@ -249,8 +284,13 @@ class SessionService {
       );
       debugPrint('🚀 [Zoomies AI] Đang gửi yêu cầu phân tích Triage (${allImages.length} ảnh) tới Gemini (loài: ${petType.displayName})...');
 
+      final effectivePetName = petName.trim().isEmpty
+          ? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo')
+          : petName.trim();
+
       final Map<String, dynamic> payload = {
         'userId': currentUid,
+        'petName': effectivePetName,
         'petType': petType.displayName, // "Chó" hoặc "Mèo"
         'symptoms': preliminaryNote ?? 'Không có mô tả chi tiết',
         'imageMimeType': 'image/jpeg',
@@ -265,6 +305,18 @@ class SessionService {
 
       final data = result.data as Map<dynamic, dynamic>;
       final sessionId = data['sessionId'] as String;
+
+      // Đồng bộ ngay lập tức petName và thông tin ca bệnh vào Firestore document
+      try {
+        await FirebaseFirestore.instance.collection('sessions').doc(sessionId).set({
+          'petName': effectivePetName,
+          'petType': petType.displayName,
+          'userId': currentUid,
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('[SessionService] Lỗi lưu petName vào Firestore: $e');
+      }
+
       final triageCardMap = (data['triageCard'] as Map<dynamic, dynamic>).cast<String, dynamic>();
 
       final rawLevel = (triageCardMap['urgencyLevel'] as String?)?.toUpperCase();
@@ -290,7 +342,7 @@ class SessionService {
       final newSession = SessionModel(
         id: sessionId,
         userId: currentUid,
-        petName: petName.trim().isEmpty ? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo') : petName.trim(),
+        petName: effectivePetName,
         petType: petType,
         imageBytes: primaryImage,
         imagesBytesList: allImages,
@@ -413,10 +465,12 @@ class SessionService {
       ];
     }
 
+    final effectiveFallbackName = petName.trim().isEmpty ? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo') : petName.trim();
+
     final newSession = SessionModel(
       id: 'zm_${DateTime.now().millisecondsSinceEpoch}',
       userId: currentUid,
-      petName: petName.trim().isEmpty ? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo') : petName.trim(),
+      petName: effectiveFallbackName,
       petType: petType,
       imageBytes: primaryImage,
       imagesBytesList: allImages,
@@ -431,6 +485,13 @@ class SessionService {
 
     _sessions.insert(0, newSession);
     _sessionsController.add(List.unmodifiable(_sessions));
+
+    try {
+      FirebaseFirestore.instance
+          .collection('sessions')
+          .doc(newSession.id)
+          .set(newSession.toMap(), SetOptions(merge: true));
+    } catch (_) {}
 
     final fallbackBuffer = StringBuffer();
     fallbackBuffer.writeln('Xin chào bạn! Tôi là Trợ lý Sức khỏe Thú cưng Zoomies.');

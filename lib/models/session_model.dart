@@ -133,7 +133,9 @@ class SessionModel {
     return SessionModel(
       id: id ?? (map['id'] as String?) ?? '',
       userId: (map['userId'] as String?) ?? 'user_default',
-      petName: (map['petName'] as String?) ?? (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo'),
+      petName: ((map['petName'] as String?)?.trim().isNotEmpty ?? false)
+          ? (map['petName'] as String).trim()
+          : (petType == PetType.dog ? 'Bé Cún' : 'Bé Mèo'),
       petType: petType,
       imageUrl: map['imageUrl'] as String?,
       triageLevel: triageLevel,

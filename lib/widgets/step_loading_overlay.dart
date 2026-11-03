@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 
 class StepItem {
   final String title;
@@ -32,27 +33,27 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
   final List<StepItem> _steps = const [
     StepItem(
       title: 'Tối ưu hóa hình ảnh',
-      description: 'Nén thuật toán flutter_image_compress xuống ≈300KB',
+      description: 'Nén thông minh thuật toán giữ nguyên độ sắc nét',
       icon: Icons.compress_rounded,
     ),
     StepItem(
-      title: 'Tải dữ liệu an toàn',
-      description: 'Đang upload tệp lên máy chủ Cloud bảo mật',
+      title: 'Truyền tải mã hóa',
+      description: 'Gửi dữ liệu qua kênh bảo mật SSL/TLS Cloud',
       icon: Icons.cloud_upload_rounded,
     ),
     StepItem(
-      title: 'AI Vision phân tích',
-      description: 'Nhận diện tổn thương bề mặt & dấu hiệu bất thường',
+      title: 'Gemini AI Vision phân tích',
+      description: 'Nhận diện tổn thương bề mặt & bệnh lý lâm sàng',
       icon: Icons.psychology_rounded,
     ),
     StepItem(
-      title: 'Phân loại Triage lâm sàng',
-      description: 'Đánh giá mức độ ưu tiên: Xanh / Vàng / Đỏ',
+      title: 'Phân loại Triage cấp tốc',
+      description: 'Xác định mức khẩn cấp: Xanh / Vàng / Đỏ',
       icon: Icons.health_and_safety_rounded,
     ),
     StepItem(
-      title: 'Khởi tạo phòng tư vấn',
-      description: 'Kết nối phòng chat trực tuyến thời gian thực',
+      title: 'Khởi tạo phòng khám',
+      description: 'Kết nối phòng tư vấn AI trực tuyến thời gian thực',
       icon: Icons.forum_rounded,
     ),
   ];
@@ -81,8 +82,7 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
   }
 
   void _startSequentialProgress() {
-    // Tổng thời gian xấp xỉ 4.2 giây (trong khoảng 3–5 giây theo yêu cầu)
-    const totalDurationMs = 4200;
+    const totalDurationMs = 4000;
     const intervalMs = 50;
     final increment = intervalMs / totalDurationMs;
 
@@ -96,8 +96,7 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
       }
     });
 
-    // Chuyển bước từng bước
-    const stepDuration = Duration(milliseconds: 800);
+    const stepDuration = Duration(milliseconds: 750);
     _stepTimer = Timer.periodic(stepDuration, (timer) {
       if (!mounted) return;
       if (_currentStepIndex < _steps.length - 1) {
@@ -106,7 +105,6 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
         });
       } else {
         timer.cancel();
-        // Giữ lại 600ms ở bước cuối rồi hoàn tất
         Future.delayed(const Duration(milliseconds: 600), () {
           if (mounted) {
             widget.onFinished();
@@ -126,6 +124,8 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = AppColors.primary;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -137,7 +137,7 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0E8388).withValues(alpha: 0.2),
+              color: primaryColor.withValues(alpha: 0.2),
               blurRadius: 28,
               offset: const Offset(0, 10),
             ),
@@ -146,31 +146,30 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Icon pulsing ở giữa
+            // Mascot pulsing ở giữa
             ScaleTransition(
               scale: _pulseAnimation,
               child: Container(
-                width: 72,
-                height: 72,
+                width: 76,
+                height: 76,
+                padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF0E8388), Color(0xFF2E4F4F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: Colors.white,
+                  border: Border.all(color: AppColors.splashBlue, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF0E8388).withValues(alpha: 0.35),
-                      blurRadius: 16,
+                      color: primaryColor.withValues(alpha: 0.3),
+                      blurRadius: 18,
                       offset: const Offset(0, 6),
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.pets_rounded,
-                  color: Colors.white,
-                  size: 38,
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/logo_icon.png',
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             ),
@@ -178,24 +177,26 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
 
             // Tiêu đề
             const Text(
-              'Đang Khởi Tạo Ca Khám...',
+              'Đang Phân Tích Ca Khám...',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: Color(0xFF0F172A),
+                letterSpacing: -0.2,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              'Hệ thống AI Zoomies đang phân tích tình trạng ${widget.petName}',
+              'AI Zoomies đang chẩn đoán hình ảnh và triệu chứng của ${widget.petName}',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 13,
                 color: Color(0xFF64748B),
+                height: 1.35,
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
             // Thanh tiến trình
             Column(
@@ -204,7 +205,7 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Tiến trình xử lý',
+                      'Tiến độ xử lý',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -214,9 +215,9 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
                     Text(
                       '${(_progress * 100).toInt()}%',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0E8388),
+                        color: primaryColor,
                       ),
                     ),
                   ],
@@ -226,9 +227,9 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
                   borderRadius: BorderRadius.circular(8),
                   child: LinearProgressIndicator(
                     value: _progress,
-                    minHeight: 8,
+                    minHeight: 7,
                     backgroundColor: const Color(0xFFE2E8F0),
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0E8388)),
+                    valueColor: const AlwaysStoppedAnimation<Color>(primaryColor),
                   ),
                 ),
               ],
@@ -254,13 +255,13 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
                     size: 20,
                   );
                 } else if (isCurrent) {
-                  iconColor = const Color(0xFF0E8388);
+                  iconColor = primaryColor;
                   trailingIcon = const SizedBox(
-                    width: 18,
-                    height: 18,
+                    width: 17,
+                    height: 17,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0E8388)),
+                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                     ),
                   );
                 } else {
@@ -268,22 +269,22 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
                   trailingIcon = const Icon(
                     Icons.radio_button_unchecked_rounded,
                     color: Color(0xFFCBD5E1),
-                    size: 20,
+                    size: 19,
                   );
                 }
 
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   decoration: BoxDecoration(
                     color: isCurrent
-                        ? const Color(0xFF0E8388).withValues(alpha: 0.08)
+                        ? primaryColor.withValues(alpha: 0.08)
                         : (isDone ? const Color(0xFFF8FAFC) : Colors.transparent),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isCurrent
-                          ? const Color(0xFF0E8388).withValues(alpha: 0.3)
+                          ? primaryColor.withValues(alpha: 0.3)
                           : Colors.transparent,
                     ),
                   ),
@@ -293,7 +294,7 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: isCurrent
-                              ? const Color(0xFF0E8388).withValues(alpha: 0.15)
+                              ? primaryColor.withValues(alpha: 0.15)
                               : const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -322,7 +323,7 @@ class _StepLoadingOverlayState extends State<StepLoadingOverlay>
                               style: TextStyle(
                                 fontSize: 11,
                                 color: isCurrent
-                                    ? const Color(0xFF0E8388)
+                                    ? primaryColor
                                     : const Color(0xFF94A3B8),
                               ),
                             ),

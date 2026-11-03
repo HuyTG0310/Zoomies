@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'screens/home_shell_screen.dart';
 import 'services/user_identity_service.dart';
+import 'theme/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,21 +31,22 @@ class ZoomiesApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Zoomies - Triage & Pet Care',
+      title: 'Zoomies - AI Pet Health Triage',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0E8388),
-          primary: const Color(0xFF0E8388),
+          seedColor: AppColors.primary,
+          primary: AppColors.primary,
           surface: Colors.white,
           brightness: Brightness.light,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        scaffoldBackgroundColor: AppColors.background,
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
-          foregroundColor: Color(0xFF0F172A),
-          elevation: 0.5,
+          foregroundColor: AppColors.slateDark,
+          elevation: 0,
+          scrolledUnderElevation: 0,
           centerTitle: true,
         ),
       ),
